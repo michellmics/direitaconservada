@@ -93,6 +93,11 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .jar .label-small { font: 700 11px var(--sans); letter-spacing: .2em; }
 .jar .label-big { font: 800 26px var(--serif); letter-spacing: .04em; }
 .jar .label-long { font-size: 19px; letter-spacing: 0; }
+/* vidro de pimenta: rótulo mais estreito */
+.jar-bottle .label-small { font-size: 8.5px; letter-spacing: .14em; }
+.jar-bottle .label-big { font-size: 23px; }
+.jar-bottle .label-long { font-size: 15px; }
+.jar-bottle .label-cap { font-size: 7px; letter-spacing: .08em; }
 .jar .label-cap { font: 600 8.5px var(--sans); letter-spacing: .14em; opacity: .6; }
 .jar .label { pointer-events: none; }
 .jar-capacity {
@@ -335,6 +340,7 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 }
 .side-card:hover, .side-card:focus-visible { transform: translateY(-4px); border-color: var(--gold); box-shadow: 0 24px 60px -20px var(--gold); outline: none; }
 .side-card .tag { color: var(--gold-2); margin: 0; }
+.side-info { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .side-jar { width: min(280px, 70%); }
 .side-jar .jar { max-width: none; transition: transform .35s; }
 .side-card:hover .side-jar .jar { transform: rotate(-3deg) scale(1.03); }

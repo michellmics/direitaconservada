@@ -45,7 +45,7 @@ $total = array_sum($count);
           <div class="side-info">
             <span class="tag"><?= e($S['tag']) ?></span>
             <h2><?= e($S['name_a']) ?> <em><?= e($S['name_b']) ?></em></h2>
-            <p class="side-motto"><?= strip_tags($S['h1']) ?></p>
+            <p class="side-motto"><?= strip_tags(str_replace('<br>', ' ', $S['h1'])) ?></p>
             <span class="side-count"><b><?= num($count[$slug]) ?></b> <?= e($S['items']) ?> no pote</span>
             <span class="btn btn-gold">Entrar no pote <?= $S['emoji'] ?></span>
           </div>

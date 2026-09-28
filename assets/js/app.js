@@ -95,23 +95,28 @@
   }
 
   // ---------- pote ----------
-  const PER_ROW = 9;
-  const MAX_IN_JAR = PER_ROW * 18;
+  // arrumação dos itens no pote (vem de includes/sides.php; mesma conta do PHP em jar_position)
+  const L = S.jar;
+  const MAX_IN_JAR = L.perRow * L.rows;
 
   function olivePosition(i) {
-    const row = Math.floor(i / PER_ROW);
-    const col = i % PER_ROW;
+    const row = Math.floor(i / L.perRow);
+    const col = i % L.perRow;
     return {
-      x: 66 + col * 33 + (row % 2 ? 16 : 0) + (rand(i) - 0.5) * 6,
-      y: 494 - row * 21 + (rand(i + 7) - 0.5) * 4,
-      r: (rand(i + 3) - 0.5) * 70,
+      x: L.x0 + col * L.dx + (row % 2 ? L.dx / 2 : 0) + (rand(i) - 0.5) * 6,
+      y: L.y0 - row * L.dy + (rand(i + 7) - 0.5) * 4,
+      r: L.rot + (rand(i + 3) - 0.5) * L.rotJitter,
     };
   }
+
+  // quando o pote lota, mostra os mais recentes (quem acabou de comprar sempre aparece)
+  const jarOffset = () => Math.max(0, olives.length - MAX_IN_JAR);
+  const slotOf = (o) => olives.indexOf(o) - jarOffset();
 
   function oliveNode(o, i, animate) {
     const { x, y } = olivePosition(i);
     const pos = document.createElementNS(SVG, 'g');
-    pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scaleOf(o)})`);
+    pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scaleOf(o) * L.itemScale})`);
     const g = document.createElementNS(SVG, 'g');
     g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : ''));
     g.dataset.id = o.id;
@@ -121,7 +126,7 @@
   }
 
   function oliveInner(o) {
-    return `<g transform="rotate(${olivePosition(olives.indexOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
+    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
       (o.selo ? seloSvg(o.selo) : '') +
       // selo de play (fora da rotação, para o triângulo ficar sempre de pé)
       (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '');
@@ -138,16 +143,20 @@
   function renderJar() {
     const layer = $('#jar-items');
     layer.innerHTML = '';
-    const inJar = olives.slice(0, MAX_IN_JAR).map((o, i) => [o, i]);
+    const inJar = olives.slice(jarOffset()).map((o, i) => [o, i]);
     // as maiores são desenhadas por último para ficarem por cima das vizinhas
     const ordered = [...inJar.filter(([o]) => scaleOf(o) <= 1), ...inJar.filter(([o]) => scaleOf(o) > 1)];
     ordered.forEach(([o, i]) => layer.appendChild(oliveNode(o, i, false)));
   }
 
   function dropOlive(o) {
-    const i = olives.length - 1;
-    if (i >= MAX_IN_JAR) return;
-    $('#jar-items').appendChild(oliveNode(o, i, true));
+    if (olives.length > MAX_IN_JAR) {
+      // pote cheio: todos andam uma casa e o novo cai no topo
+      renderJar();
+      $(`.olive[data-id="${o.id}"]`)?.classList.add('drop');
+      return;
+    }
+    $('#jar-items').appendChild(oliveNode(o, slotOf(o), true));
   }
 
   function setupJarTooltip() {

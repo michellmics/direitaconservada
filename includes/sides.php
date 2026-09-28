@@ -53,6 +53,8 @@ const SIDES = [
         ],
         'lid'   => ['#e7c54d', '#b8901c', '#8a6a10'],
         'brine' => ['#d9d98a', '#8c9a3c'],
+        // pote largo; itens deitados, 9 por fileira
+        'jar'   => ['shape' => 'pot', 'perRow' => 9, 'dx' => 33, 'dy' => 21, 'x0' => 66, 'y0' => 494, 'rows' => 18, 'rot' => 0, 'rotJitter' => 70, 'itemScale' => 1],
         'defs' => '
             <radialGradient id="olive-verde" cx=".35" cy=".35" r=".8"><stop offset="0" stop-color="#b5c25a"/><stop offset=".6" stop-color="#7d8c2f"/><stop offset="1" stop-color="#4f5a18"/></radialGradient>
             <radialGradient id="olive-preta" cx=".35" cy=".35" r=".8"><stop offset="0" stop-color="#6a5a6e"/><stop offset=".6" stop-color="#2e2530"/><stop offset="1" stop-color="#140f15"/></radialGradient>
@@ -108,9 +110,10 @@ const SIDES = [
             'gold' => '#e04a1f', 'gold-2' => '#ff8a3d', 'olive' => '#b3261e',
             'glow' => '#5c1a12', 'ink' => '#3a120c', 'dark' => '#8a2216', 'on-accent' => '#2a0a04',
         ],
-        // pote comum, aberto: sem tampa e sem líquido (pimenta não é conserva)
-        'lid'   => null,
+        // vidro de pimenta: alto e fino, tampinha vermelha, sem líquido; pimentas em pé
+        'lid'   => ['#ff5a4a', '#c8231a', '#7e120c'],
         'brine' => null,
+        'jar'   => ['shape' => 'bottle', 'perRow' => 7, 'dx' => 22, 'dy' => 27, 'x0' => 134, 'y0' => 484, 'rows' => 12, 'rot' => -90, 'rotJitter' => 40, 'itemScale' => .85],
         'defs' => '
             <linearGradient id="pepper-vermelha" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6a50"/><stop offset=".55" stop-color="#d62d20"/><stop offset="1" stop-color="#8e140c"/></linearGradient>
             <linearGradient id="pepper-biquinho" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc063"/><stop offset=".55" stop-color="#ff7a1a"/><stop offset="1" stop-color="#c2410c"/></linearGradient>
@@ -159,14 +162,19 @@ function jar_rand(float $seed): float
     return $x - floor($x);
 }
 
-function jar_position(int $i): array
+function jar_position(int $i, array $L): array
 {
-    $perRow = 9;
-    $row = intdiv($i, $perRow);
-    $col = $i % $perRow;
+    $row = intdiv($i, $L['perRow']);
+    $col = $i % $L['perRow'];
     return [
-        'x' => 66 + $col * 33 + ($row % 2 ? 16 : 0) + (jar_rand($i) - .5) * 6,
-        'y' => 494 - $row * 21 + (jar_rand($i + 7) - .5) * 4,
-        'r' => (jar_rand($i + 3) - .5) * 70,
+        'x' => $L['x0'] + $col * $L['dx'] + ($row % 2 ? $L['dx'] / 2 : 0) + (jar_rand($i) - .5) * 6,
+        'y' => $L['y0'] - $row * $L['dy'] + (jar_rand($i + 7) - .5) * 4,
+        'r' => $L['rot'] + (jar_rand($i + 3) - .5) * $L['rotJitter'],
     ];
+}
+
+// quantos itens cabem visíveis no pote
+function jar_slots(array $L): int
+{
+    return $L['perRow'] * $L['rows'];
 }
