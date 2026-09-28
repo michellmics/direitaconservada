@@ -28,9 +28,9 @@ $oldest = array_slice($items, 0, 5);
             <?php if ($o['foto']): ?>
               <img class="post-avatar avatar-photo" src="<?= e($o['foto']) ?>" alt="" loading="lazy">
             <?php else: ?>
-              <span class="post-avatar avatar-<?= e($o['side']) ?>-<?= e($o['tipo']) ?>"><?= e(mb_strtoupper(mb_substr($o['nome'], 0, 1))) ?></span>
+              <span class="post-avatar avatar-<?= e($o['side']) ?>-<?= e($o['tipo']) ?>"><?= e(mb_strtoupper(mb_substr(nome_proprio($o['nome']), 0, 1))) ?></span>
             <?php endif; ?>
-            <span><b><?= e($o['nome']) ?></b><small><?= e($o['cidade']) ?>/<?= e($o['uf']) ?> · desde <?= date('d/m/Y', strtotime($o['desde'])) ?></small></span>
+            <span><b><?= e(nome_proprio($o['nome'])) ?></b><small><?= e($o['cidade']) ?>/<?= e($o['uf']) ?> · desde <?= date('d/m/Y', strtotime($o['desde'])) ?></small></span>
           </li>
         <?php endforeach; ?>
       </ul>

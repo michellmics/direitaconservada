@@ -25,12 +25,24 @@
   const liked = new Set(store.get('likes', []));
   const myComments = store.get('comments', []);  // comentários feitos neste navegador (qualquer pote)
 
+  // Nome próprio: "JOÃO DA SILVA" / "joão da silva" → "João da Silva" (igual a nome_proprio() no PHP)
+  const PARTICULAS = new Set(['da', 'de', 'do', 'das', 'dos', 'e', 'di', 'du']);
+  function nomeProprio(s) {
+    return String(s || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR').split(' ')
+      .map((w, i) => (i > 0 && PARTICULAS.has(w))
+        ? w
+        : w.replace(/(^|[-'’])(\p{L})/gu, (_, sep, ch) => sep + ch.toLocaleUpperCase('pt-BR')))
+      .join(' ');
+  }
+
   const olives = [...DC.items, ...mine];
+  olives.forEach((o) => { o.nome = nomeProprio(o.nome); });
+  [...DC.comments, ...myComments].forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
   const byId = (id) => olives.find((o) => o.id === id);
 
   // Quem está comentando: o item comprado mais recente, em qualquer um dos potes
   function me() {
-    const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ ...o, side: s })));
+    const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ ...o, side: s, nome: nomeProprio(o.nome) })));
     return all.sort((a, b) => (b.criado || 0) - (a.criado || 0))[0] || null;
   }
 
@@ -519,7 +531,7 @@
     const f = new FormData(buyForm);
     return {
       tipo: f.get('tipo'),
-      nome: f.get('nome').trim(),
+      nome: nomeProprio(f.get('nome')),
       cidade: f.get('cidade').trim(),
       uf: f.get('uf'),
       frase: f.get('frase').trim(),
@@ -567,6 +579,8 @@
   }
 
   buyForm.addEventListener('input', updateTotal);
+  // corrige o nome ao sair do campo
+  buyForm.elements.nome.addEventListener('blur', (e) => { e.target.value = nomeProprio(e.target.value); });
   buyForm.addEventListener('change', updateTotal);
 
   buyModal.addEventListener('click', (e) => {
