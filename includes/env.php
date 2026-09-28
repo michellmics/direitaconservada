@@ -1,11 +1,19 @@
 <?php
 // Lê o arquivo .env da raiz do projeto (CHAVE=valor por linha; # comenta).
-// Variáveis já definidas no servidor têm prioridade sobre o arquivo.
+// Variáveis definidas no servidor (ambiente real do processo) têm prioridade sobre o arquivo.
+// Não usa putenv(): no "php -S" o processo é reaproveitado entre acessos, e putenv
+// faria mudanças no .env só valerem depois de reiniciar o servidor.
 
-function load_env(string $file): void
+function env_file_vars(): array
 {
+    static $vars = null;
+    if ($vars !== null) {
+        return $vars;
+    }
+    $vars = [];
+    $file = dirname(__DIR__) . '/.env';
     if (!is_readable($file)) {
-        return;
+        return $vars;
     }
     foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         $line = trim($line);
@@ -17,17 +25,16 @@ function load_env(string $file): void
         if (preg_match('/^(["\'])(.*)\1$/', $value, $m)) {
             $value = $m[2];
         }
-        if (getenv($key) === false) {
-            putenv("$key=$value");
-            $_ENV[$key] = $value;
-        }
+        $vars[$key] = $value;
     }
+    return $vars;
 }
 
 function env(string $key, ?string $default = null): ?string
 {
     $value = getenv($key);
-    return $value === false ? $default : $value;
+    if ($value !== false) {
+        return $value;
+    }
+    return env_file_vars()[$key] ?? $default;
 }
-
-load_env(dirname(__DIR__) . '/.env');
