@@ -108,8 +108,9 @@ const SIDES = [
             'gold' => '#e04a1f', 'gold-2' => '#ff8a3d', 'olive' => '#b3261e',
             'glow' => '#5c1a12', 'ink' => '#3a120c', 'dark' => '#8a2216', 'on-accent' => '#2a0a04',
         ],
-        'lid'   => ['#e0473a', '#a8261c', '#6e1510'],
-        'brine' => ['#f6d49a', '#d9733f'],
+        // pote comum, aberto: sem tampa e sem líquido (pimenta não é conserva)
+        'lid'   => null,
+        'brine' => null,
         'defs' => '
             <linearGradient id="pepper-vermelha" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6a50"/><stop offset=".55" stop-color="#d62d20"/><stop offset="1" stop-color="#8e140c"/></linearGradient>
             <linearGradient id="pepper-biquinho" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc063"/><stop offset=".55" stop-color="#ff7a1a"/><stop offset="1" stop-color="#c2410c"/></linearGradient>
