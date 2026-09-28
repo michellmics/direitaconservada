@@ -17,6 +17,19 @@ php -S localhost:8080
 
 Abra http://localhost:8080
 
+## Banco de dados (MySQL 8.0.16+)
+
+1. Copie `.env.example` para `.env` (se ainda não existir) e preencha `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` e `DB_PASSWORD`.
+2. Rode as migrations — o script cria o banco se não existir:
+
+```bash
+php database/migrate.php            # roda o que falta
+php database/migrate.php --status   # mostra o que já rodou
+```
+
+As migrations ficam em `database/migrations/` e rodam uma vez cada (registro na tabela `migrations`).
+O site ainda usa os dados de exemplo de `data/mock.php`; a conexão está pronta em `includes/db.php` (`db()`).
+
 ## Estrutura
 
 ```
@@ -24,6 +37,10 @@ index.php               entrada: escolha do pote
 pote.php                página do pote (?lado=direita | ?lado=esquerda)
 includes/sides.php      TUDO que muda entre os lados: textos, tipos e preços, selos, cores, desenho dos itens
 includes/config.php     constantes gerais (capacidade, UFs) e helpers (e(), money(), num())
+includes/env.php        lê o .env
+includes/db.php         conexão PDO com o MySQL: db()
+database/migrate.php    roda as migrations
+database/migrations/    arquivos .sql (001_criar_tabelas.sql = estrutura completa)
 includes/header.php     <head> (cores do lado via variáveis CSS) e barra do topo
 includes/footer.php     rodapé + dados para o JS (window.DC)
 partials/jar.php        o pote em SVG (usado no pote e na página de entrada)
