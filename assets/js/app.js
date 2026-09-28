@@ -15,12 +15,24 @@
     },
   };
 
-  const mine = store.get('mine', []);          // azeitonas compradas neste navegador
-  const myPosts = store.get('posts', []);      // posts do mural publicados neste navegador
-  const liked = new Set(store.get('likes', []));
+  // Lado atual (pote) e o outro. "olives" = itens do pote atual (azeitonas ou pimentas).
+  const SIDE = DC.side;
+  const S = DC.sides[SIDE];
+  const OTHER = DC.sides[S.other];
 
-  const olives = [...DC.olives, ...mine];
+  const mine = store.get(`${SIDE}_mine`, []);      // itens comprados neste navegador, neste pote
+  const myPosts = store.get(`${SIDE}_posts`, []);  // posts do mural publicados neste navegador
+  const liked = new Set(store.get('likes', []));
+  const myComments = store.get('comments', []);  // comentários feitos neste navegador (qualquer pote)
+
+  const olives = [...DC.items, ...mine];
   const byId = (id) => olives.find((o) => o.id === id);
+
+  // Quem está comentando: o item comprado mais recente, em qualquer um dos potes
+  function me() {
+    const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ ...o, side: s })));
+    return all.sort((a, b) => (b.criado || 0) - (a.criado || 0))[0] || null;
+  }
 
   // ---------- utilidades ----------
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -32,15 +44,20 @@
   const numero = (id) => '#' + String(id).padStart(4, '0');
   const initials = (n) => n.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
   const rand = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
-  const oliveUrl = (o) => `${location.origin}${location.pathname}#azeitona-${o.id}`;
-  const gradOf = (tipo) => ({ preta: 'olive-preta', grande: 'olive-grande' }[tipo] || 'olive-verde');
-  const typeLabel = (tipo) => DC.types[tipo]?.label || tipo;
+  const oliveUrl = (o) => `${location.origin}${location.pathname}?lado=${SIDE}#${S.item}-${o.id}`;
+  const typeLabel = (tipo, side = SIDE) => DC.sides[side].types[tipo]?.label || tipo;
   const money = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const scaleOf = (o) => S.scales[o.tipo] || 1;
+
+  // desenho do item como <svg> avulso (certificado, etc.)
+  const itemSvg = (tipo, side = SIDE, scale = 1) =>
+    `<svg viewBox="-24 -17 48 34" aria-hidden="true"><g transform="scale(${scale})">${DC.sides[side].shapes[tipo] || ''}</g></svg>`;
 
   // Foto da pessoa; sem foto (ou se falhar ao carregar) mostra as iniciais
-  const initialsAvatar = (o, cls) => `<div class="${cls} avatar-${o.tipo}">${esc(initials(o.nome))}</div>`;
+  const initialsClass = (o, cls) => `${cls} avatar-${o.side || SIDE}-${o.tipo}`;
+  const initialsAvatar = (o, cls) => `<div class="${initialsClass(o, cls)}">${esc(initials(o.nome))}</div>`;
   const avatarHtml = (o, cls) => o.foto
-    ? `<img class="${cls} avatar-photo" src="${esc(o.foto)}" alt="Foto de ${esc(o.nome)}" data-avatar-of="${o.id}" data-cls="${cls}">`
+    ? `<img class="${cls} avatar-photo" src="${esc(o.foto)}" alt="Foto de ${esc(o.nome)}" data-fallback-class="${esc(initialsClass(o, cls))}" data-initials="${esc(initials(o.nome))}">`
     : initialsAvatar(o, cls);
 
   // Selo: 'br' (bandeira do Brasil), um emoji ou uma imagem enviada (data:...)
@@ -65,8 +82,8 @@
 
   document.addEventListener('error', (e) => {
     const img = e.target;
-    if (img.tagName !== 'IMG' || !img.dataset.avatarOf) return;
-    img.outerHTML = initialsAvatar(byId(Number(img.dataset.avatarOf)), img.dataset.cls);
+    if (img.tagName !== 'IMG' || !img.dataset.fallbackClass) return;
+    img.outerHTML = `<div class="${img.dataset.fallbackClass}">${img.dataset.initials}</div>`;
   }, true);
 
   function toast(msg) {
@@ -94,8 +111,7 @@
   function oliveNode(o, i, animate) {
     const { x, y } = olivePosition(i);
     const pos = document.createElementNS(SVG, 'g');
-    const scale = o.tipo === 'grande' ? 1.5 : 1;
-    pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scale})`);
+    pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scaleOf(o)})`);
     const g = document.createElementNS(SVG, 'g');
     g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : ''));
     g.dataset.id = o.id;
@@ -105,10 +121,7 @@
   }
 
   function oliveInner(o) {
-    return `<g transform="rotate(${olivePosition(olives.indexOf(o)).r.toFixed(0)})">` +
-      `<ellipse rx="16" ry="11.5" fill="url(#${gradOf(o.tipo)})"/>` +
-      (o.tipo === 'recheada' ? '<ellipse cx="14" rx="3.8" ry="4.6" fill="#c0392b"/>' : '') +
-      '<ellipse cx="-6" cy="-5" rx="5" ry="2" fill="#fff" opacity=".35"/></g>' +
+    return `<g transform="rotate(${olivePosition(olives.indexOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
       (o.selo ? seloSvg(o.selo) : '') +
       // selo de play (fora da rotação, para o triângulo ficar sempre de pé)
       (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '');
@@ -123,18 +136,18 @@
   }
 
   function renderJar() {
-    const layer = $('#olives');
+    const layer = $('#jar-items');
     layer.innerHTML = '';
     const inJar = olives.slice(0, MAX_IN_JAR).map((o, i) => [o, i]);
-    // as grandes são desenhadas por último para ficarem por cima das vizinhas
-    const ordered = [...inJar.filter(([o]) => o.tipo !== 'grande'), ...inJar.filter(([o]) => o.tipo === 'grande')];
+    // as maiores são desenhadas por último para ficarem por cima das vizinhas
+    const ordered = [...inJar.filter(([o]) => scaleOf(o) <= 1), ...inJar.filter(([o]) => scaleOf(o) > 1)];
     ordered.forEach(([o, i]) => layer.appendChild(oliveNode(o, i, false)));
   }
 
   function dropOlive(o) {
     const i = olives.length - 1;
     if (i >= MAX_IN_JAR) return;
-    $('#olives').appendChild(oliveNode(o, i, true));
+    $('#jar-items').appendChild(oliveNode(o, i, true));
   }
 
   function setupJarTooltip() {
@@ -280,32 +293,25 @@
   function closeModals() {
     $$('.modal').forEach((m) => { m.hidden = true; });
     document.body.style.overflow = '';
-    if (location.hash.startsWith('#azeitona-')) history.replaceState(null, '', location.pathname);
+    if (location.hash.startsWith(`#${S.item}-`)) history.replaceState(null, '', location.pathname + location.search);
   }
   document.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeModals(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModals(); });
 
   // ---------- certificado ----------
-  function oliveSvg(tipo) {
-    const [rx, ry] = tipo === 'grande' ? [29, 21] : [24, 17];
-    return `<svg viewBox="0 0 60 44"><ellipse cx="30" cy="22" rx="${rx}" ry="${ry}" fill="url(#${gradOf(tipo)})"/>` +
-      (tipo === 'recheada' ? '<ellipse cx="50" cy="22" rx="6" ry="7" fill="#c0392b"/>' : '') +
-      '<ellipse cx="22" cy="15" rx="7" ry="3" fill="#fff" opacity=".35"/></svg>';
-  }
-
   function certHtml(o) {
     return `<div class="cert">
-      <small>CERTIFICADO DE CONSERVAÇÃO</small>
-      <div class="cert-photo">${avatarWithSelo(o, 'cert-avatar')}${oliveSvg(o.tipo)}</div>
+      <small>${esc(S.cert_title)}</small>
+      <div class="cert-photo">${avatarWithSelo(o, 'cert-avatar')}${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</div>
       <div class="cert-name">${esc(o.nome)}</div>
-      <div class="cert-since">Direita conservada desde<b>${fmtDate(o.desde)}</b></div>
+      <div class="cert-since">${esc(S.cert_since)}<b>${fmtDate(o.desde)}</b></div>
       <q>${esc(o.frase)}</q>
-      <div class="cert-foot"><span>Azeitona ${numero(o.id)} · ${esc(typeLabel(o.tipo))}</span><span>${esc(o.cidade)}/${esc(o.uf)}</span></div>
+      <div class="cert-foot"><span>${esc(S.Item)} ${numero(o.id)} · ${esc(typeLabel(o.tipo))}</span><span>${esc(o.cidade)}/${esc(o.uf)}</span></div>
     </div>`;
   }
 
   function shareText(o) {
-    return `🫒 Sou Direita Conservada desde ${fmtDate(o.desde)}! Azeitona ${numero(o.id)}.\n"${o.frase}"\nGaranta a sua:`;
+    return `${S.emoji} Sou ${S.name} desde ${fmtDate(o.desde)}! ${S.Item} ${numero(o.id)}.\n"${o.frase}"\nGaranta a sua:`;
   }
 
   function shareButtons(o) {
@@ -328,7 +334,7 @@
     $('#cert-view').innerHTML = certHtml(o);
     $('#share-view').innerHTML = shareButtons(o);
     openModal('#cert-modal');
-    history.replaceState(null, '', '#azeitona-' + o.id);
+    history.replaceState(null, '', `${location.pathname}${location.search}#${S.item}-${o.id}`);
   }
 
   document.addEventListener('click', async (e) => {
@@ -341,7 +347,7 @@
     if (dl) downloadCert(byId(Number(dl.dataset.download)));
     if (ns) {
       const o = byId(Number(ns.dataset.nativeShare));
-      navigator.share({ title: 'Direita Conservada', text: shareText(o), url: oliveUrl(o) }).catch(() => {});
+      navigator.share({ title: S.name, text: shareText(o), url: oliveUrl(o) }).catch(() => {});
     }
   });
 
@@ -349,64 +355,67 @@
   async function downloadCert(o) {
     const photo = o.foto ? await loadImage(o.foto).catch(() => null) : null;
     const seloImg = o.selo && isImageSelo(o.selo) ? await loadImage(o.selo).catch(() => null) : null;
+    const itemImg = await loadImage(itemDataUrl(o.tipo)).catch(() => null);
+    const T = S.theme;
     const W = 1080, H = 1920;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d');
 
-    g.fillStyle = '#161c0c'; g.fillRect(0, 0, W, H);
+    g.fillStyle = T.bg; g.fillRect(0, 0, W, H);
     const glow = g.createRadialGradient(W / 2, 300, 50, W / 2, 300, 900);
-    glow.addColorStop(0, '#3a4a1a'); glow.addColorStop(1, 'rgba(22,28,12,0)');
+    glow.addColorStop(0, T.glow); glow.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = glow; g.fillRect(0, 0, W, H);
 
     const cx = 90, cy = 330, cw = W - 180, ch = 1180;
     roundRect(g, cx, cy, cw, ch, 36); g.fillStyle = '#f4ecd8'; g.fill();
-    roundRect(g, cx + 22, cy + 22, cw - 44, ch - 44, 24); g.strokeStyle = '#c9a227'; g.lineWidth = 8; g.stroke();
-    roundRect(g, cx + 40, cy + 40, cw - 80, ch - 80, 18); g.strokeStyle = '#3d4a1f'; g.lineWidth = 2; g.setLineDash([10, 8]); g.stroke(); g.setLineDash([]);
+    roundRect(g, cx + 22, cy + 22, cw - 44, ch - 44, 24); g.strokeStyle = T.gold; g.lineWidth = 8; g.stroke();
+    roundRect(g, cx + 40, cy + 40, cw - 80, ch - 80, 18); g.strokeStyle = T.dark; g.lineWidth = 2; g.setLineDash([10, 8]); g.stroke(); g.setLineDash([]);
 
     g.textAlign = 'center';
     g.fillStyle = '#f4ecd8'; g.font = '800 72px Fraunces, Georgia, serif';
-    g.fillText('Direita', W / 2, 170);
-    g.fillStyle = '#e7c54d'; g.fillText('Conservada', W / 2, 250);
+    g.fillText(S.name_a, W / 2, 170);
+    g.fillStyle = T['gold-2']; g.fillText(S.name_b, W / 2, 250);
 
-    g.fillStyle = '#7a5c0c'; g.font = '700 30px Inter, sans-serif';
-    g.fillText('C E R T I F I C A D O   D E   C O N S E R V A Ç Ã O', W / 2, cy + 130);
+    g.fillStyle = T.dark; g.font = '700 30px Inter, sans-serif';
+    // letras espaçadas: "C E R T I F I C A D O   D E   …"
+    g.fillText(S.cert_title.split(' ').map((w) => w.split('').join(' ')).join('   '), W / 2, cy + 130);
 
-    // foto (se houver) com a azeitona como selo; sem foto, azeitona grande
+    // foto (se houver) com o item como selo; sem foto, item grande no centro
     const px = W / 2, py = cy + 290;
     if (photo) {
       g.save();
       g.beginPath(); g.arc(px, py, 130, 0, Math.PI * 2); g.clip();
       g.drawImage(photo, px - 130, py - 130, 260, 260);
       g.restore();
-      g.beginPath(); g.arc(px, py, 130, 0, Math.PI * 2); g.strokeStyle = '#c9a227'; g.lineWidth = 10; g.stroke();
-      drawOlive(g, o.tipo, px + 120, py + 100, 0.45);
+      g.beginPath(); g.arc(px, py, 130, 0, Math.PI * 2); g.strokeStyle = T.gold; g.lineWidth = 10; g.stroke();
+      drawItem(g, itemImg, px + 125, py + 100, 150);
       if (o.selo) drawSelo(g, o.selo, seloImg, px - 105, py + 95, 42);
     } else {
-      drawOlive(g, o.tipo, px, py, 1);
+      drawItem(g, itemImg, px, py, 330 * Math.min(scaleOf(o), 1.2));
       if (o.selo) drawSelo(g, o.selo, seloImg, px - 150, py + 75, 42);
     }
 
-    g.fillStyle = '#25300f'; g.font = '800 84px Fraunces, Georgia, serif';
+    g.fillStyle = T.ink; g.font = '800 84px Fraunces, Georgia, serif';
     fitText(g, o.nome, W / 2, cy + 520, cw - 140);
-    g.font = '600 38px Inter, sans-serif'; g.fillText('Direita conservada desde', W / 2, cy + 610);
-    g.fillStyle = '#3d4a1f'; g.font = '800 96px Fraunces, Georgia, serif'; g.fillText(fmtDate(o.desde), W / 2, cy + 710);
+    g.font = '600 38px Inter, sans-serif'; g.fillText(S.cert_since, W / 2, cy + 610);
+    g.fillStyle = T.dark; g.font = '800 96px Fraunces, Georgia, serif'; g.fillText(fmtDate(o.desde), W / 2, cy + 710);
 
-    g.fillStyle = '#25300f'; g.font = 'italic 600 46px Fraunces, Georgia, serif';
+    g.fillStyle = T.ink; g.font = 'italic 600 46px Fraunces, Georgia, serif';
     wrapText(g, `“${o.frase}”`, W / 2, cy + 820, cw - 180, 60);
 
     g.strokeStyle = '#b9b69a'; g.setLineDash([8, 8]); g.beginPath(); g.moveTo(cx + 80, cy + ch - 130); g.lineTo(cx + cw - 80, cy + ch - 130); g.stroke(); g.setLineDash([]);
     g.fillStyle = '#6b6a55'; g.font = '600 32px Inter, sans-serif';
-    g.textAlign = 'left'; g.fillText(`Azeitona ${numero(o.id)} · ${typeLabel(o.tipo)}`, cx + 80, cy + ch - 75);
+    g.textAlign = 'left'; g.fillText(`${S.Item} ${numero(o.id)} · ${typeLabel(o.tipo)}`, cx + 80, cy + ch - 75);
     g.textAlign = 'right'; g.fillText(`${o.cidade}/${o.uf}`, cx + cw - 80, cy + ch - 75);
 
     g.textAlign = 'center'; g.fillStyle = '#f4ecd8'; g.font = '600 40px Inter, sans-serif';
-    g.fillText('Garanta sua azeitona no pote', W / 2, H - 230);
-    g.fillStyle = '#e7c54d'; g.font = '800 48px Inter, sans-serif';
+    g.fillText(`Garanta sua ${S.item} no pote`, W / 2, H - 230);
+    g.fillStyle = T['gold-2']; g.font = '800 48px Inter, sans-serif';
     g.fillText(location.host || 'direitaconservada.com.br', W / 2, H - 160);
 
     const a = document.createElement('a');
-    a.download = `conservado-${o.id}.png`;
+    a.download = `${S.slug}-${o.id}.png`;
     a.href = c.toDataURL('image/png');
     a.click();
   }
@@ -422,15 +431,14 @@
     });
   }
 
-  function drawOlive(g, tipo, x, y, s) {
-    if (tipo === 'grande') s *= 1.2;
-    const og = g.createRadialGradient(x - 40 * s, y - 30 * s, 10 * s, x, y, 150 * s);
-    if (tipo === 'preta') { og.addColorStop(0, '#6a5a6e'); og.addColorStop(.6, '#2e2530'); og.addColorStop(1, '#140f15'); }
-    else if (tipo === 'grande') { og.addColorStop(0, '#d2de6e'); og.addColorStop(.55, '#8fa532'); og.addColorStop(1, '#55661a'); }
-    else { og.addColorStop(0, '#b5c25a'); og.addColorStop(.6, '#7d8c2f'); og.addColorStop(1, '#4f5a18'); }
-    g.beginPath(); g.ellipse(x, y, 150 * s, 105 * s, 0, 0, Math.PI * 2); g.fillStyle = og; g.fill();
-    if (tipo === 'recheada') { g.beginPath(); g.ellipse(x + 128 * s, y, 34 * s, 42 * s, 0, 0, Math.PI * 2); g.fillStyle = '#c0392b'; g.fill(); }
-    g.beginPath(); g.ellipse(x - 55 * s, y - 45 * s, 45 * s, 18 * s, -0.2, 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,.35)'; g.fill();
+  // o mesmo desenho do pote, como imagem SVG autônoma, para desenhar no canvas
+  const itemDataUrl = (tipo) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-24 -17 48 34" width="480" height="340"><defs>${S.defs}</defs>${S.shapes[tipo]}</svg>`);
+
+  function drawItem(g, img, x, y, w) {
+    if (!img) return;
+    const h = w * 34 / 48;
+    g.drawImage(img, x - w / 2, y - h / 2, w, h);
   }
 
   function drawSelo(g, selo, img, x, y, r) {
@@ -481,16 +489,21 @@
 
   function goStep(n) { $$('.step-pane', buyModal).forEach((p) => { p.hidden = p.dataset.step !== String(n); }); }
 
-  $$('[data-open-buy]').forEach((b) => b.addEventListener('click', () => { goStep(1); openModal('#buy-modal'); buyForm.nome.focus(); }));
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-open-buy]')) return;
+    goStep(1);
+    openModal('#buy-modal');
+    buyForm.elements.nome.focus();
+  });
   // preço acompanha o tipo escolhido
   function updateSelectedPrice() {
-    const tipo = buyForm.tipo.value;
-    $$('[data-price-selected]', buyModal).forEach((el) => { el.textContent = money(DC.types[tipo].price); });
+    const tipo = buyForm.elements.tipo.value;
+    $$('[data-price-selected]', buyModal).forEach((el) => { el.textContent = money(S.types[tipo].price); });
     $$('[data-type-selected]', buyModal).forEach((el) => { el.textContent = typeLabel(tipo); });
   }
   $$('input[name="tipo"]', buyForm).forEach((r) => r.addEventListener('change', updateSelectedPrice));
 
-  $$('.chip', buyForm).forEach((c) => c.addEventListener('click', () => { buyForm.frase.value = c.dataset.phrase; }));
+  $$('.chip', buyForm).forEach((c) => c.addEventListener('click', () => { buyForm.elements.frase.value = c.dataset.phrase; }));
   $('[data-back]', buyModal).addEventListener('click', () => goStep(1));
 
   // foto: recorta em quadrado e reduz para 256px antes de guardar
@@ -586,10 +599,10 @@
   $('#copy-pix').addEventListener('click', () => toast('Código Pix copiado (de mentirinha)'));
 
   $('#simulate-pay').addEventListener('click', () => {
-    const o = { ...pending, id: Math.max(...olives.map((x) => x.id)) + 1, desde: todayIso(), likes: 0 };
+    const o = { ...pending, id: Math.max(...olives.map((x) => x.id)) + 1, side: SIDE, desde: todayIso(), likes: 0, criado: Date.now() };
     olives.push(o);
     mine.push(o);
-    store.set('mine', mine);
+    store.set(`${SIDE}_mine`, mine);
     dropOlive(o);
     updateStats();
     renderFeed();
@@ -683,30 +696,87 @@
   let shown = PAGE;
 
   function allPosts() {
-    const fromOlives = olives.map((o) => ({ id: 'o' + o.id, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
+    const fromOlives = olives.map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
     const list = [...extra, ...fromOlives];
-    return sort === 'top'
-      ? list.sort((a, b) => likesOf(b) - likesOf(a))
-      : list.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+    if (sort === 'top') return list.sort((a, b) => likesOf(b) - likesOf(a));
+    if (sort === 'debate') return list.sort((a, b) => commentsOf(b.id).length - commentsOf(a.id).length);
+    return list.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
   }
   const likesOf = (p) => p.likes + (liked.has(p.id) ? 1 : 0);
+
+  // ---------- comentários (os dois lados podem comentar) ----------
+  const openComments = new Set();
+  const commentsOf = (postId) => [...DC.comments, ...myComments].filter((c) => c.post === postId);
+  const themeVars = (sd) => Object.entries(sd.theme).map(([k, v]) => `--${k}:${v}`).join(';');
+
+  function commentsButton(postId) {
+    const list = commentsOf(postId);
+    const visitors = list.filter((c) => c.autor.side !== SIDE).length;
+    return `💬 ${list.length}` + (visitors ? ` <span class="visitors" title="comentários de quem é do outro pote">· ${OTHER.emoji} ${visitors}</span>` : '');
+  }
+
+  function commentHtml(c) {
+    const a = c.autor;
+    const sd = DC.sides[a.side];
+    const visitor = a.side !== SIDE;
+    // quem vem do outro pote aparece com as cores do lado dele
+    return `<div class="comment${visitor ? ' is-visitor' : ''}"${visitor ? ` style="${themeVars(sd)}"` : ''}>
+      ${avatarWithSelo(a, 'comment-avatar')}
+      <div class="comment-body">
+        <div class="comment-head"><b>${esc(a.nome)}</b>${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
+        <p>${esc(c.texto)}</p>
+      </div>
+    </div>`;
+  }
+
+  function commentFormHtml(postId) {
+    const eu = me();
+    if (!eu) {
+      return `<p class="comment-cta">Para comentar, garanta sua ${S.item} ${S.emoji}
+        <button class="btn btn-gold btn-sm" type="button" data-open-buy>Garantir</button>
+        ou uma ${OTHER.item} ${OTHER.emoji} <a href="pote.php?lado=${OTHER.slug}">no outro pote</a>.</p>`;
+    }
+    const sd = DC.sides[eu.side];
+    return `<form class="comment-form" data-post="${postId}">
+      ${avatarWithSelo(eu, 'comment-avatar')}
+      <input name="texto" maxlength="200" required autocomplete="off"
+        placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})…">
+      <button class="btn btn-gold btn-sm">Enviar</button>
+    </form>`;
+  }
+
+  function commentsSectionHtml(postId) {
+    const list = commentsOf(postId);
+    return `<div class="comment-list">${list.length ? list.map(commentHtml).join('') : '<p class="comment-empty">Ninguém comentou ainda. Os dois lados podem comentar.</p>'}</div>
+      ${commentFormHtml(postId)}`;
+  }
+
+  function refreshComments(postId) {
+    const post = $(`.post[data-post-id="${postId}"]`);
+    if (!post) return;
+    $('[data-toggle-comments]', post).innerHTML = commentsButton(postId);
+    $('.comments', post).innerHTML = commentsSectionHtml(postId);
+  }
 
   function postHtml(p) {
     const o = byId(p.oliveId);
     const video = p.video ? ` data-video="${esc(JSON.stringify(p.video))}"` : '';
-    return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}"${video}>
+    const open = openComments.has(p.id);
+    return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}"${video}>
       <div class="post-head">
         ${avatarWithSelo(o, 'post-avatar')}
-        <div><b>${esc(o.nome)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · conservado desde ${fmtDate(o.desde)}</small></div>
+        <div><b>${esc(o.nome)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
       ${p.video ? `<div class="post-video">${videoCoverHtml(p.video)}</div>` : ''}
       <div class="post-actions">
-        <button data-like="${p.id}" class="${liked.has(p.id) ? 'liked' : ''}">🫒 ${likesOf(p)}</button>
+        <button data-like="${p.id}" class="${liked.has(p.id) ? 'liked' : ''}">${S.emoji} ${likesOf(p)}</button>
+        <button data-toggle-comments="${p.id}" class="${open ? 'active' : ''}">${commentsButton(p.id)}</button>
         <button data-share-post="${p.id}">Compartilhar</button>
         <button data-view="${o.id}">Certificado</button>
       </div>
+      <div class="comments"${open ? '' : ' hidden'}>${open ? commentsSectionHtml(p.id) : ''}</div>
     </article>`;
   }
 
@@ -715,6 +785,24 @@
     $('#feed').innerHTML = posts.slice(0, shown).map(postHtml).join('');
     $('#feed-more').hidden = shown >= posts.length;
   }
+
+  $('#feed').addEventListener('submit', (e) => {
+    const form = e.target.closest('.comment-form');
+    if (!form) return;
+    e.preventDefault();
+    const eu = me();
+    const texto = form.elements.texto.value.trim();
+    if (!eu || !texto) return;
+    myComments.push({
+      post: form.dataset.post,
+      autor: { side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
+      texto,
+      data: todayIso(),
+    });
+    store.set('comments', myComments);
+    refreshComments(form.dataset.post);
+    $(`.post[data-post-id="${form.dataset.post}"] .comment-form input`)?.focus();
+  });
 
   $$('.tab').forEach((t) => t.addEventListener('click', () => {
     $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
@@ -728,6 +816,17 @@
     const like = e.target.closest('[data-like]');
     const share = e.target.closest('[data-share-post]');
     const view = e.target.closest('[data-view]');
+    const toggle = e.target.closest('[data-toggle-comments]');
+    if (toggle) {
+      const id = toggle.dataset.toggleComments;
+      const box = $('.comments', toggle.closest('.post'));
+      const open = !openComments.has(id);
+      open ? openComments.add(id) : openComments.delete(id);
+      toggle.classList.toggle('active', open);
+      box.innerHTML = open ? commentsSectionHtml(id) : '';
+      box.hidden = !open;
+      if (open) $('input', box)?.focus({ preventScroll: true });
+    }
     if (e.target.closest('[data-play]')) playVideo(e.target.closest('.post'));
     if (e.target.closest('[data-stop]')) stopVideo(e.target.closest('.post'));
     if (like) {
@@ -736,27 +835,27 @@
       store.set('likes', [...liked]);
       const p = allPosts().find((x) => x.id === id);
       like.classList.toggle('liked', liked.has(id));
-      like.textContent = `🫒 ${likesOf(p)}`;
+      like.textContent = `${S.emoji} ${likesOf(p)}`;
     }
     if (share) {
       const p = allPosts().find((x) => x.id === share.dataset.sharePost);
       const o = byId(p.oliveId);
-      const text = `"${p.text || 'Olha esse vídeo'}" — ${o.nome}, conservado desde ${fmtDate(o.desde)} 🫒`;
-      if (navigator.share) navigator.share({ title: 'Direita Conservada', text, url: oliveUrl(o) }).catch(() => {});
+      const text = `"${p.text || 'Olha esse vídeo'}" — ${o.nome}, ${S.since} ${fmtDate(o.desde)} ${S.emoji}`;
+      if (navigator.share) navigator.share({ title: S.name, text, url: oliveUrl(o) }).catch(() => {});
       else window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + oliveUrl(o))}`, '_blank', 'noopener');
     }
     if (view) openCert(byId(Number(view.dataset.view)));
   });
 
-  // composer: só quem tem azeitona publica
+  // composer: só quem tem item deste pote publica (comentar vale para os dois lados)
   const composer = $('#composer');
   const composerText = $('#composer-text');
 
   function updateComposer() {
-    const me = mine[mine.length - 1];
-    if (me) {
-      $('#composer-avatar').outerHTML = avatarHtml(me, 'composer-avatar').replace(/^<(\w+) /, '<$1 id="composer-avatar" ');
-      composerText.placeholder = `O que você quer compartilhar, ${me.nome.split(' ')[0]}?`;
+    const eu = mine[mine.length - 1];
+    if (eu) {
+      $('#composer-avatar').outerHTML = avatarHtml(eu, 'composer-avatar').replace(/^<(\w+) /, '<$1 id="composer-avatar" ');
+      composerText.placeholder = `O que você quer compartilhar, ${eu.nome.split(' ')[0]}?`;
     }
   }
 
@@ -779,18 +878,18 @@
   }
   composerText.addEventListener('input', updateComposerPreview);
   composerText.addEventListener('focus', () => {
-    if (!mine.length) { toast('Só conservados podem publicar. Garanta sua azeitona!'); }
+    if (!mine.length) { toast(`Só ${S.members} podem publicar aqui. Garanta sua ${S.item}!`); }
   });
   composer.addEventListener('submit', (e) => {
     e.preventDefault();
-    const me = mine[mine.length - 1];
-    if (!me) { goStep(1); openModal('#buy-modal'); return; }
+    const eu = mine[mine.length - 1];
+    if (!eu) { goStep(1); openModal('#buy-modal'); return; }
     const { video, text } = extractVideo(composerText.value);
     if (!text && !video) return;
     if (text.length > TEXT_MAX) { toast(`Máximo de ${TEXT_MAX} caracteres (sem contar o link)`); return; }
-    myPosts.unshift({ id: 'p' + Date.now(), oliveId: me.id, text, video, date: todayIso(), likes: 0 });
-    store.set('posts', myPosts);
-    if (video) refreshOlive(me); // aparece o selo de play na azeitona
+    myPosts.unshift({ id: `${SIDE}-p${Date.now()}`, oliveId: eu.id, text, video, date: todayIso(), likes: 0 });
+    store.set(`${SIDE}_posts`, myPosts);
+    if (video) refreshOlive(eu); // aparece o selo de play no item
     composerText.value = '';
     updateComposerPreview();
     sort = 'recentes';
@@ -811,7 +910,7 @@
   renderFeed();
   updateComposer();
 
-  // link compartilhado: #azeitona-97 abre direto o certificado
-  const m = location.hash.match(/^#azeitona-(\d+)$/);
+  // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado
+  const m = location.hash.match(new RegExp(`^#${S.item}-(\\d+)$`));
   if (m) openCert(byId(Number(m[1])));
 })();
