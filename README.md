@@ -35,6 +35,7 @@ O site ainda usa os dados de exemplo de `data/mock.php`; a conexão está pronta
 ```
 index.php               entrada: escolha do pote
 pote.php                página do pote (?lado=direita | ?lado=esquerda)
+perfil.php              perfil de quem está no pote (?lado=direita&id=42)
 includes/sides.php      TUDO que muda entre os lados: textos, tipos e preços, selos, cores, desenho dos itens
 includes/config.php     constantes gerais (capacidade, UFs) e helpers (e(), money(), num())
 includes/env.php        lê o .env

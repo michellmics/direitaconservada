@@ -56,7 +56,9 @@
   const numero = (id) => '#' + String(id).padStart(4, '0');
   const initials = (n) => n.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
   const rand = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
-  const oliveUrl = (o) => `${location.origin}${location.pathname}?lado=${SIDE}#${S.item}-${o.id}`;
+  const profileUrl = (side, id) => `perfil.php?lado=${side}&id=${id}`;
+  // link que vai para o compartilhamento: o perfil da pessoa
+  const oliveUrl = (o) => new URL(profileUrl(o.side || SIDE, o.id), location.href).href;
   const typeLabel = (tipo, side = SIDE) => DC.sides[side].types[tipo]?.label || tipo;
   const money = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const scaleOf = (o) => S.scales[o.tipo] || 1;
@@ -207,6 +209,7 @@
       tip.innerHTML =
         `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)}</small></div></div>` +
         `<q>${esc(o.frase)}</q>` +
+        (DC.profileId === o.id ? '' : `<a class="tip-profile" href="${profileUrl(SIDE, o.id)}">Ver perfil →</a>`) +
         (v ? `<div class="tip-video">${videoCoverHtml(v)}</div>` : '');
       tip.classList.toggle('has-video', !!v);
       tip.classList.remove('is-playing');
@@ -298,10 +301,12 @@
   }
 
   function updateStats() {
-    $('#stat-total').textContent = olives.length.toLocaleString('pt-BR');
-    $('#stat-hoje').textContent = olives.filter((o) => o.desde === todayIso()).length.toLocaleString('pt-BR');
-    $('#jar-count').textContent = olives.length.toLocaleString('pt-BR');
-    $('#jar-meter').style.width = Math.max(0.5, (olives.length / DC.capacity) * 100) + '%';
+    const set = (sel, v) => { const el = $(sel); if (el) el.textContent = v.toLocaleString('pt-BR'); };
+    set('#stat-total', olives.length);
+    set('#stat-hoje', olives.filter((o) => o.desde === todayIso()).length);
+    set('#jar-count', olives.length);
+    const meter = $('#jar-meter');
+    if (meter) meter.style.width = Math.max(0.5, (olives.length / DC.capacity) * 100) + '%';
   }
 
   // ---------- modais ----------
@@ -347,6 +352,7 @@
       <a class="btn btn-ghost" href="${fb}" target="_blank" rel="noopener">Facebook</a>
       <button class="btn btn-ghost" data-copy="${esc(url)}">Copiar link</button>
       <button class="btn btn-ghost wide" data-download="${o.id}">Baixar imagem (Stories / Status)</button>
+      ${DC.profileId === o.id ? '' : `<a class="btn btn-ghost wide" href="${profileUrl(SIDE, o.id)}">Ver perfil</a>`}
       ${navigator.share ? `<button class="btn btn-link wide" data-native-share="${o.id}">Mais opções…</button>` : ''}`;
   }
 
@@ -716,6 +722,7 @@
     updateStats();
     renderFeed();
     updateComposer();
+    updateMyProfileLink();
 
     const showCert = (o) => {
       $('#cert-slot').innerHTML = certHtml(o);
@@ -817,7 +824,8 @@
   function allPosts() {
     const fromOlives = olives.filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
-    const list = [...extra, ...fromOlives];
+    let list = [...extra, ...fromOlives];
+    if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
     if (sort === 'top') return list.sort((a, b) => likesOf(b) - likesOf(a));
     if (sort === 'debate') return list.sort((a, b) => commentsOf(b.id).length - commentsOf(a.id).length);
     return list.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
@@ -843,7 +851,7 @@
     return `<div class="comment${visitor ? ' is-visitor' : ''}"${visitor ? ` style="${themeVars(sd)}"` : ''}>
       ${avatarWithSelo(a, 'comment-avatar')}
       <div class="comment-body">
-        <div class="comment-head"><b>${esc(a.nome)}</b>${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
+        <div class="comment-head">${a.id ? `<a class="name-link" href="${profileUrl(a.side, a.id)}">${esc(a.nome)}</a>` : `<b>${esc(a.nome)}</b>`}${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
         <p>${esc(c.texto)}</p>
       </div>
     </div>`;
@@ -885,7 +893,7 @@
     return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}"${video}>
       <div class="post-head">
         ${avatarWithSelo(o, 'post-avatar')}
-        <div><b>${esc(o.nome)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
+        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a><small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
       ${p.video ? `<div class="post-video">${videoCoverHtml(p.video)}</div>` : ''}
@@ -914,7 +922,7 @@
     if (!eu || !texto) return;
     myComments.push({
       post: form.dataset.post,
-      autor: { side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
+      autor: { id: eu.id, side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
       texto,
       data: todayIso(),
     });
@@ -971,6 +979,7 @@
   const composerText = $('#composer-text');
 
   function updateComposer() {
+    if (!composer) return; // página sem mural para publicar (ex.: perfil)
     const eu = mine[mine.length - 1];
     if (eu) {
       $('#composer-avatar').outerHTML = avatarHtml(eu, 'composer-avatar').replace(/^<(\w+) /, '<$1 id="composer-avatar" ');
@@ -995,11 +1004,11 @@
       box.hidden = true;
     }
   }
-  composerText.addEventListener('input', updateComposerPreview);
-  composerText.addEventListener('focus', () => {
+  composerText?.addEventListener('input', updateComposerPreview);
+  composerText?.addEventListener('focus', () => {
     if (!mine.length) { toast(`Só ${S.members} podem publicar aqui. Garanta sua ${S.item}!`); }
   });
-  composer.addEventListener('submit', (e) => {
+  composer?.addEventListener('submit', (e) => {
     e.preventDefault();
     const eu = mine[mine.length - 1];
     if (!eu) { goStep(1); openModal('#buy-modal'); return; }
@@ -1020,14 +1029,174 @@
   // ranking: "mais antigos" abre o certificado
   $$('[data-olive-id]').forEach((li) => li.addEventListener('click', () => openCert(byId(Number(li.dataset.oliveId)))));
 
+  // ---------- perfil (perfil.php) ----------
+  const addYear = (iso) => { const [y, m, d] = iso.split('-'); return `${Number(y) + 1}-${m}-${d}`; };
+
+  // capa com itens do pote espalhados
+  function coverPattern() {
+    const tipos = Object.keys(S.types);
+    let out = '';
+    for (let i = 0; i < 39; i++) {
+      const x = (i % 13) * 31 + rand(i * 3) * 18;
+      const y = Math.floor(i / 13) * 34 + 10 + rand(i * 5) * 18;
+      out += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(rand(i * 7) * 360).toFixed(0)}) scale(.55)">${S.shapes[tipos[i % tipos.length]]}</g>`;
+    }
+    return `<svg class="profile-cover-art" viewBox="0 0 400 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${out}</svg>`;
+  }
+
+  // de onde veio o post comentado (pode ser do outro pote)
+  function postContext(postId) {
+    const m = postId.match(/^(\w+)-o(\d+)$/);
+    if (m) {
+      const list = m[1] === SIDE ? olives : DC.otherItems || [];
+      const o = list.find((x) => x.id === Number(m[2]));
+      return o ? { side: m[1], o, text: o.frase } : null;
+    }
+    const side = postId.split('-')[0];
+    const p = store.get(`${side}_posts`, []).find((x) => x.id === postId);
+    if (!p) return null;
+    const owner = store.get(`${side}_mine`, []).find((x) => x.id === p.oliveId);
+    return owner ? { side, o: owner, text: p.text || '(vídeo)' } : null;
+  }
+
+  function renderProfile() {
+    const card = $('#profile-card');
+    const o = byId(DC.profileId);
+    if (!o) {
+      card.innerHTML = `<div class="profile-missing">
+        <h1>Perfil não encontrado</h1>
+        <p>Essa ${S.item} não está no pote (ou o link está errado).</p>
+        <a class="btn btn-gold" href="pote.php?lado=${SIDE}">Voltar ao pote ${S.emoji}</a>
+      </div>`;
+      $$('.profile-side, .profile-stats-wrap, #mural, .profile-page > .section.alt').forEach((el) => { el.hidden = true; });
+      return;
+    }
+
+    const isMine = mine.some((m) => m.id === o.id);
+    const posts = allPosts();
+    const received = posts.flatMap((p) => commentsOf(p.id));
+    const visitors = received.filter((c) => c.autor.side !== SIDE);
+    const made = [...DC.comments, ...myComments].filter((c) => c.autor.side === SIDE && c.autor.id === o.id);
+    const madeOther = made.filter((c) => !c.post.startsWith(SIDE + '-'));
+    const likes = posts.reduce((n, p) => n + likesOf(p), 0);
+    const validade = o.valido_ate || addYear(o.desde);
+
+    const badges = [
+      isMine && ['voce', '★ Este é você'],
+      o.id <= 100 && ['fundador', `🏅 ${o.id <= 10 ? 'Fundador(a) top 10' : 'Fundador(a)'}`],
+      scaleOf(o) > 1 && ['grande', `${S.emoji} ${S.Item} ${typeLabel(o.tipo)}`],
+      videoOf(o) && ['video', '🎬 Publica vídeos'],
+      madeOther.length && ['debate', `${OTHER.emoji} Debate com o outro lado`],
+      likes >= 300 && ['popular', '🔥 Popular no mural'],
+    ].filter(Boolean);
+
+    document.title = `${o.nome} · ${S.name}`;
+    card.innerHTML = `
+      <div class="profile-cover">${coverPattern()}<span class="profile-number">${numero(o.id)}</span></div>
+      <div class="profile-main">
+        <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo')}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
+        <div class="profile-id">
+          <h1>${esc(o.nome)}</h1>
+          <p class="profile-meta">📍 ${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.Item)} ${esc(typeLabel(o.tipo))}</p>
+        </div>
+        <div class="profile-since">
+          <small>${esc(S.cert_since)}</small>
+          <b>${fmtDate(o.desde)}</b>
+        </div>
+        <blockquote class="profile-quote">“${esc(o.frase)}”</blockquote>
+        ${badges.length ? `<ul class="profile-badges">${badges.map(([k, t]) => `<li class="badge-${k}">${esc(t)}</li>`).join('')}</ul>` : ''}
+        ${isMine ? `<div class="profile-validity">
+          <span>Sua ${S.item} fica no pote até <b>${fmtDate(validade)}</b></span>
+          <span class="validity-bar"><i style="width:${Math.min(100, Math.max(3, ((Date.now() - new Date(o.desde)) / (new Date(validade) - new Date(o.desde))) * 100)).toFixed(0)}%"></i></span>
+        </div>` : ''}
+        <div class="profile-actions">
+          <button class="btn btn-gold" type="button" data-view="${o.id}">Ver certificado</button>
+          <button class="btn btn-ghost" type="button" data-share-profile>Compartilhar perfil</button>
+          ${isMine ? `<button class="btn btn-ghost" type="button" data-open-buy>+ Mais ${S.items}</button>` : ''}
+        </div>
+      </div>`;
+
+    $('#profile-stats').innerHTML = [
+      [S.emoji, likes, 'curtidas recebidas'],
+      ['📝', posts.length, posts.length === 1 ? 'publicação' : 'publicações'],
+      ['💬', received.length, 'comentários recebidos'],
+      [OTHER.emoji, visitors.length, `comentários de quem é ${OTHER.name}`],
+      ['🗣️', made.length, 'comentários feitos'],
+    ].map(([icon, n, label]) => `<div class="stat-card"><span>${icon}</span><b>${n.toLocaleString('pt-BR')}</b><small>${esc(label)}</small></div>`).join('');
+
+    // comentários que a pessoa fez (neste pote e no outro)
+    $('#made-comments').innerHTML = made.length
+      ? made.map((c) => {
+        const ctx = postContext(c.post);
+        const sd = DC.sides[ctx?.side || SIDE];
+        const away = ctx && ctx.side !== SIDE;
+        return `<article class="made-comment${away ? ' is-away' : ''}"${away ? ` style="${themeVars(sd)}"` : ''}>
+          <div class="made-where">
+            ${away ? `<span class="side-tag">${sd.emoji} no pote ${esc(sd.name)}</span>` : '<span class="made-here">neste pote</span>'}
+            ${ctx ? `em resposta a <a class="name-link" href="${profileUrl(ctx.side, ctx.o.id)}">${esc(nomeProprio(ctx.o.nome))}</a>: <q>${esc(ctx.text)}</q>` : ''}
+          </div>
+          <p>${esc(c.texto)}</p>
+        </article>`;
+      }).join('')
+      : `<p class="comment-empty">${esc(o.nome.split(' ')[0])} ainda não comentou em nenhum post.</p>`;
+
+    if (!posts.length) $('#feed').innerHTML = `<p class="comment-empty">Nenhuma publicação ainda.</p>`;
+
+    // no pote: destaca a azeitona/pimenta da pessoa
+    const inJar = $(`#jar-items .olive[data-id="${o.id}"]`);
+    if (inJar) {
+      inJar.classList.add('is-profile');
+      inJar.parentNode.parentNode.appendChild(inJar.parentNode); // traz para frente
+    }
+    $('#profile-jar-caption').textContent = inJar
+      ? `${S.Item} ${numero(o.id)} está brilhando no pote.`
+      : `${S.Item} ${numero(o.id)} está no fundo do pote (o vidro mostra as mais recentes).`;
+
+    // só a própria pessoa vê: todos os itens dela nos dois potes
+    if (isMine) {
+      const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((x) => ({ ...x, side: s })));
+      $('#my-items-section').hidden = false;
+      $('#my-items').innerHTML = all.map((x) => {
+        const sd = DC.sides[x.side];
+        return `<a class="my-item${x.side === SIDE && x.id === o.id ? ' current' : ''}" href="${profileUrl(x.side, x.id)}" style="${themeVars(sd)}">
+          ${itemSvg(x.tipo, x.side)}
+          <span><b>${esc(nomeProprio(x.nome))}</b><small>${esc(sd.Item)} ${esc(typeLabel(x.tipo, x.side))} · ${numero(x.id)}</small></span>
+        </a>`;
+      }).join('');
+    }
+  }
+
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('[data-share-profile]')) return;
+    const o = byId(DC.profileId);
+    const url = oliveUrl(o);
+    const text = `${S.emoji} ${o.nome} · ${S.cert_since.toLowerCase()} ${fmtDate(o.desde)}`;
+    if (navigator.share) { navigator.share({ title: S.name, text, url }).catch(() => {}); return; }
+    try { await navigator.clipboard.writeText(url); toast('Link do perfil copiado!'); } catch { toast(url); }
+  });
+
+  // botão "Meu perfil" no topo (qualquer item comprado, em qualquer pote)
+  function updateMyProfileLink() {
+    const eu = me();
+    const link = $('#my-profile');
+    if (!eu || !link) return;
+    link.href = profileUrl(eu.side, eu.id);
+    link.innerHTML = `${avatarHtml(eu, 'my-profile-avatar')}<span>Meu perfil</span>`;
+    link.hidden = false;
+  }
+
   // ---------- início ----------
-  renderJar();
-  setupJarTooltip();
-  // pré-carrega as fotos para o balão abrir já com a imagem
-  (window.requestIdleCallback || setTimeout)(() => olives.forEach((o) => { if (o.foto) new Image().src = o.foto; }));
+  if ($('#jar')) {
+    renderJar();
+    setupJarTooltip();
+    // pré-carrega as fotos para o balão abrir já com a imagem
+    (window.requestIdleCallback || setTimeout)(() => olives.forEach((o) => { if (o.foto) new Image().src = o.foto; }));
+  }
   updateStats();
   renderFeed();
   updateComposer();
+  updateMyProfileLink();
+  if (DC.profileId !== undefined) renderProfile();
 
   // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado
   const m = location.hash.match(new RegExp(`^#${S.item}-(\\d+)$`));

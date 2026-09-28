@@ -147,7 +147,7 @@ function mock_comments(string $side, array $items): array
             $texts = $pool[$author['side']][$fromOther ? 'other' : 'same'];
             $out[] = [
                 'post'  => "$side-o{$it['id']}",
-                'autor' => array_intersect_key($author, array_flip(['side', 'nome', 'foto', 'tipo', 'selo'])),
+                'autor' => array_intersect_key($author, array_flip(['id', 'side', 'nome', 'foto', 'tipo', 'selo'])),
                 'texto' => $texts[mt_rand(0, count($texts) - 1)],
                 'data'  => $it['desde'],
             ];

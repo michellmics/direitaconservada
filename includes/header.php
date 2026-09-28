@@ -25,12 +25,14 @@ $O = side($S['other']);
       <?= item_svg($S, array_key_first($S['types']), 'brand-icon') ?>
       <span><?= e($S['name_a']) ?> <b><?= e($S['name_b']) ?></b></span>
     </a>
+    <?php $home = basename($_SERVER['SCRIPT_NAME']) === 'pote.php' ? '' : 'pote.php?lado=' . $S['slug']; ?>
     <nav>
-      <a href="#pote">O Pote</a>
-      <a href="#mural">Mural</a>
-      <a href="#ranking">Ranking</a>
-      <a href="#como">Como funciona</a>
+      <a href="<?= $home ?>#pote">O Pote</a>
+      <a href="<?= $home ?>#mural">Mural</a>
+      <a href="<?= $home ?>#ranking">Ranking</a>
+      <a href="<?= $home ?>#como">Como funciona</a>
     </nav>
+    <a class="my-profile" id="my-profile" hidden title="Meu perfil"></a>
     <a class="side-switch" href="pote.php?lado=<?= $O['slug'] ?>" style="<?= theme_vars($O) ?>" title="Ir para <?= e($O['name']) ?>">
       <?= item_svg($O, array_key_first($O['types']), 'side-switch-icon') ?><span>Espiar o outro pote</span>
     </a>
