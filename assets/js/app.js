@@ -504,13 +504,88 @@
     openModal('#buy-modal');
     buyForm.elements.nome.focus();
   });
-  // preço acompanha o tipo escolhido
-  function updateSelectedPrice() {
-    const tipo = buyForm.elements.tipo.value;
-    $$('[data-price-selected]', buyModal).forEach((el) => { el.textContent = money(S.types[tipo].price); });
-    $$('[data-type-selected]', buyModal).forEach((el) => { el.textContent = typeLabel(tipo); });
+  // ---------- carrinho: várias azeitonas/pimentas na mesma compra ----------
+  const cart = []; // itens já adicionados: { tipo, nome, cidade, uf, frase, foto, selo, qtd }
+  const qtyInput = $('#qty-input');
+  const QTY_MAX = 50;
+
+  const qtyValue = () => Math.min(QTY_MAX, Math.max(1, parseInt(qtyInput.value, 10) || 1));
+  const entryPrice = (en) => S.types[en.tipo].price * en.qtd;
+  // o formulário conta como item quando a pessoa começou a preencher (ou quando o carrinho está vazio)
+  const formStarted = () => !!(buyForm.elements.nome.value.trim() || buyForm.elements.frase.value.trim());
+  const formCounts = () => formStarted() || !cart.length;
+
+  function readEntry() {
+    const f = new FormData(buyForm);
+    return {
+      tipo: f.get('tipo'),
+      nome: f.get('nome').trim(),
+      cidade: f.get('cidade').trim(),
+      uf: f.get('uf'),
+      frase: f.get('frase').trim(),
+      foto: photoData,
+      selo: f.get('selo') === 'custom' ? seloData : f.get('selo') || null,
+      qtd: qtyValue(),
+    };
   }
-  $$('input[name="tipo"]', buyForm).forEach((r) => r.addEventListener('change', updateSelectedPrice));
+
+  function totalNow() {
+    const current = formCounts() ? S.types[buyForm.elements.tipo.value].price * qtyValue() : 0;
+    return cart.reduce((sum, en) => sum + entryPrice(en), 0) + current;
+  }
+
+  function renderCart() {
+    $('#cart').hidden = !cart.length;
+    $('#cart-list').innerHTML = cart.map((en, i) => `<li>
+      ${itemSvg(en.tipo)}
+      <span class="cart-desc"><b>${en.qtd}× ${esc(typeLabel(en.tipo))}</b> · ${esc(en.nome)}</span>
+      <span class="cart-price">${money(entryPrice(en))}</span>
+      <button type="button" class="cart-remove" data-remove="${i}" aria-label="Remover">×</button>
+    </li>`).join('');
+    updateTotal();
+  }
+
+  function updateTotal() {
+    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(totalNow()); });
+  }
+
+  // limpa só o que é do item (mantém cidade, UF e tipo para agilizar o próximo)
+  function clearItemFields() {
+    buyForm.elements.nome.value = '';
+    buyForm.elements.frase.value = '';
+    qtyInput.value = 1;
+    buyForm.querySelector('input[name="selo"][value=""]').checked = true;
+    resetPhoto();
+    resetSelo();
+  }
+
+  function resetCart() {
+    cart.length = 0;
+    buyForm.reset();
+    clearItemFields();
+    renderCart();
+  }
+
+  buyForm.addEventListener('input', updateTotal);
+  buyForm.addEventListener('change', updateTotal);
+
+  buyModal.addEventListener('click', (e) => {
+    const step = e.target.closest('[data-qty]');
+    if (step) { qtyInput.value = Math.min(QTY_MAX, Math.max(1, qtyValue() + Number(step.dataset.qty))); updateTotal(); }
+    const rm = e.target.closest('[data-remove]');
+    if (rm) { cart.splice(Number(rm.dataset.remove), 1); renderCart(); }
+  });
+  qtyInput.addEventListener('blur', () => { qtyInput.value = qtyValue(); updateTotal(); });
+
+  $('#add-more').addEventListener('click', () => {
+    if (!buyForm.reportValidity()) return;
+    cart.push(readEntry());
+    clearItemFields();
+    renderCart();
+    toast(`Adicionada ao pedido. Agora preencha a próxima ${S.item}.`);
+    buyModal.querySelector('.modal-card').scrollTo({ top: 0, behavior: 'smooth' });
+    buyForm.elements.nome.focus({ preventScroll: true });
+  });
 
   $$('.chip', buyForm).forEach((c) => c.addEventListener('click', () => { buyForm.elements.frase.value = c.dataset.phrase; }));
   $('[data-back]', buyModal).addEventListener('click', () => goStep(1));
@@ -589,40 +664,61 @@
     syncSeloUpload();
   }
 
+  // Continuar: o que está no formulário entra no pedido (se foi preenchido) e vai para o Pix
   buyForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const f = new FormData(buyForm);
-    pending = {
-      nome: f.get('nome').trim(),
-      cidade: f.get('cidade').trim(),
-      uf: f.get('uf'),
-      tipo: f.get('tipo'),
-      frase: f.get('frase').trim(),
-      foto: photoData,
-      selo: f.get('selo') === 'custom' ? seloData : f.get('selo') || null,
-    };
+    const entries = [...cart];
+    if (formCounts()) {
+      if (!buyForm.reportValidity()) return;
+      entries.push(readEntry());
+    }
+    pending = entries;
+    const count = entries.reduce((n, en) => n + en.qtd, 0);
+    $('#pix-summary').textContent = `${count} ${count > 1 ? S.items : S.item}`;
+    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(entries.reduce((s, en) => s + entryPrice(en), 0)); });
     renderFakeQr();
     goStep(2);
   });
+  $('[data-back]', buyModal).addEventListener('click', updateTotal);
 
   $('#copy-pix').addEventListener('click', () => toast('Código Pix copiado (de mentirinha)'));
 
   $('#simulate-pay').addEventListener('click', () => {
-    const o = { ...pending, id: Math.max(...olives.map((x) => x.id)) + 1, side: SIDE, desde: todayIso(), likes: 0, criado: Date.now() };
-    olives.push(o);
-    mine.push(o);
+    let nextId = Math.max(...olives.map((x) => x.id)) + 1;
+    const bought = [];
+    pending.forEach((en) => {
+      const { qtd, ...data } = en;
+      for (let k = 0; k < qtd; k++) {
+        // cópias do mesmo item não repetem a frase no mural
+        bought.push({ ...data, id: nextId++, side: SIDE, desde: todayIso(), likes: 0, criado: Date.now() + bought.length, semPost: k > 0 });
+      }
+    });
+    bought.forEach((o, k) => {
+      olives.push(o);
+      mine.push(o);
+      setTimeout(() => dropOlive(o), k * 160); // caem uma após a outra
+    });
     store.set(`${SIDE}_mine`, mine);
-    dropOlive(o);
     updateStats();
     renderFeed();
     updateComposer();
-    $('#cert-slot').innerHTML = certHtml(o);
-    $('#share-buttons').innerHTML = shareButtons(o);
+
+    const showCert = (o) => {
+      $('#cert-slot').innerHTML = certHtml(o);
+      $('#share-buttons').innerHTML = shareButtons(o);
+      $$('#bought-list li').forEach((li) => li.classList.toggle('active', Number(li.dataset.id) === o.id));
+    };
+    const many = bought.length > 1;
+    $('#bought-summary').hidden = !many;
+    $('#bought-list').hidden = !many;
+    $('#bought-summary').textContent = `${bought.length} ${S.items} entraram no pote. Veja o certificado de cada uma:`;
+    $('#bought-list').innerHTML = bought.map((o) => `<li data-id="${o.id}">
+      <button type="button">${itemSvg(o.tipo)}<span>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.nome)}</span></button>
+    </li>`).join('');
+    $$('#bought-list li').forEach((li) => li.addEventListener('click', () => showCert(byId(Number(li.dataset.id)))));
+    showCert(bought[0]);
     goStep(3);
-    buyForm.reset();
-    resetPhoto();
-    resetSelo();
-    updateSelectedPrice();
+    resetCart();
   });
 
   function renderFakeQr() {
@@ -705,7 +801,7 @@
   let shown = PAGE;
 
   function allPosts() {
-    const fromOlives = olives.map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
+    const fromOlives = olives.filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
     const list = [...extra, ...fromOlives];
     if (sort === 'top') return list.sort((a, b) => likesOf(b) - likesOf(a));

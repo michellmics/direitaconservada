@@ -410,6 +410,42 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
   color: var(--text); padding: .7em .85em; font: 1rem var(--sans); outline: none; resize: vertical;
 }
 .field :focus { border-color: var(--gold); }
+/* ---------- carrinho ---------- */
+.cart { background: var(--surface); border: 1px solid var(--gold); border-radius: 14px; padding: 12px 14px; margin-bottom: 18px; }
+.cart-title { display: block; font-size: .8rem; color: var(--gold-2); margin-bottom: 6px; }
+.cart-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cart-list li { display: flex; align-items: center; gap: 10px; font-size: .88rem; }
+.cart-list svg { flex: none; width: 34px; height: 24px; }
+.cart-desc { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cart-price { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cart-remove { border: 0; background: none; color: var(--muted); font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 0 2px; }
+.cart-remove:hover { color: var(--text); }
+.cart-next { margin: 10px 0 0; font-size: .78rem; color: var(--muted); }
+
+.qty-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -6px 0 16px; }
+.qty-row > span { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.qty-row small { font-weight: 400; }
+.qty { display: flex; align-items: center; background: var(--surface); border: 1.5px solid var(--line); border-radius: 99px; overflow: hidden; }
+.qty button { width: 36px; height: 34px; border: 0; background: none; color: var(--text); font-size: 1.2rem; cursor: pointer; }
+.qty button:hover { background: var(--surface-2); color: var(--gold-2); }
+.qty input {
+  width: 44px; border: 0; background: none; color: var(--text); text-align: center;
+  font: 700 1rem var(--sans); outline: none; -moz-appearance: textfield;
+}
+.qty input::-webkit-outer-spin-button, .qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.buy-actions { display: flex; flex-direction: column; gap: 8px; }
+.buy-actions small { font-weight: 400; opacity: .7; }
+
+.bought-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
+.bought-list button {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text);
+  border-radius: 10px; padding: 6px 10px; font: .85rem var(--sans);
+}
+.bought-list svg { flex: none; width: 30px; height: 21px; }
+.bought-list li.active button { border-color: var(--gold); background: var(--surface-2); }
+
 .selo-field { margin-bottom: 16px; }
 .selo-field > b { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
 .selo-field > b small { font-weight: 400; }

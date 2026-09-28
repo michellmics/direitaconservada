@@ -8,6 +8,14 @@
     <!-- passo 1: dados -->
     <form class="step-pane" data-step="1" id="buy-form">
       <h2 id="buy-title">Sua <?= e($S['item']) ?></h2>
+
+      <!-- carrinho: aparece quando há itens adicionados -->
+      <div class="cart" id="cart" hidden>
+        <b class="cart-title">No seu pedido</b>
+        <ul class="cart-list" id="cart-list"></ul>
+        <p class="cart-next" id="cart-next">Preencha abaixo para adicionar mais uma, ou continue para o pagamento.</p>
+      </div>
+
       <div class="olive-picker">
         <?php foreach ($S['types'] as $val => $t): ?>
           <label>
@@ -19,6 +27,14 @@
             </span>
           </label>
         <?php endforeach; ?>
+      </div>
+      <div class="qty-row">
+        <span>Quantidade <small>(iguais, no mesmo nome)</small></span>
+        <div class="qty">
+          <button type="button" data-qty="-1" aria-label="Menos uma">−</button>
+          <input type="number" name="qtd" id="qty-input" value="1" min="1" max="50" inputmode="numeric" aria-label="Quantidade">
+          <button type="button" data-qty="1" aria-label="Mais uma">+</button>
+        </div>
       </div>
       <div class="photo-row">
         <label class="photo-pick" title="Escolher foto">
@@ -61,7 +77,10 @@
           <button type="button" class="chip" data-phrase="<?= e($f) ?>"><?= e($f) ?></button>
         <?php endforeach; ?>
       </div>
-      <button class="btn btn-gold btn-block" type="submit">Continuar · <span data-price-selected><?= money($S['types'][$firstType]['price']) ?></span>/ano</button>
+      <div class="buy-actions">
+        <button class="btn btn-ghost btn-block" type="button" id="add-more">+ Adicionar outra <?= e($S['item']) ?> <small>(outro tipo ou outra pessoa)</small></button>
+        <button class="btn btn-gold btn-block" type="submit">Continuar · <span data-price-total><?= money($S['types'][$firstType]['price']) ?></span>/ano</button>
+      </div>
     </form>
 
     <!-- passo 2: pagamento (simulado) -->
@@ -71,8 +90,8 @@
       <div class="pix">
         <div class="qr" id="qr"></div>
         <div>
-          <p class="price"><span data-price-selected><?= money($S['types'][$firstType]['price']) ?></span><small>/ano</small></p>
-          <p class="muted small">1 <?= e($S['item']) ?> <b data-type-selected><?= e($S['types'][$firstType]['label']) ?></b> no pote por 12 meses + certificado + direito de publicar no mural e comentar nos dois potes.</p>
+          <p class="price"><span data-price-total><?= money($S['types'][$firstType]['price']) ?></span><small>/ano</small></p>
+          <p class="muted small"><b id="pix-summary">1 <?= e($S['item']) ?></b> no pote por 12 meses + certificados + direito de publicar no mural e comentar nos dois potes.</p>
           <button class="btn btn-ghost btn-sm" type="button" id="copy-pix">Copiar código Pix</button>
         </div>
       </div>
@@ -83,6 +102,8 @@
     <!-- passo 3: certificado -->
     <div class="step-pane" data-step="3" hidden>
       <h2><?= e($S['success']) ?></h2>
+      <p class="muted" id="bought-summary" hidden></p>
+      <ul class="bought-list" id="bought-list" hidden></ul>
       <div class="cert-slot" id="cert-slot"></div>
       <div class="share" id="share-buttons"></div>
     </div>
