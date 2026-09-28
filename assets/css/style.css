@@ -305,7 +305,7 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
   background: var(--gold); color: var(--on-accent); white-space: nowrap;
 }
 .comment-empty { color: var(--muted); font-size: .85rem; margin: 0; }
-.comment-form { display: flex; gap: 8px; align-items: center; }
+.comment-form { display: flex; gap: 8px; align-items: flex-start; }
 .comment-form input {
   flex: 1; min-width: 0; background: var(--bg-2); border: 1.5px solid var(--line); border-radius: 99px;
   color: var(--text); padding: .55em 1em; font: .9rem var(--sans); outline: none;
@@ -369,7 +369,7 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .choose-page .footer { border-color: #2a221b; color: #9d9282; }
 
 /* ---------- ranking ---------- */
-.ranking-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 40px; }
+.ranking-grid { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 36px; }
 .ranking { list-style: none; margin: 0; padding: 0; counter-reset: r; }
 .ranking li { display: grid; grid-template-columns: 28px 40px 1fr 50px; align-items: center; gap: 12px; padding: 8px 0; counter-increment: r; }
 .ranking li::before { content: counter(r) "º"; color: var(--muted); font-size: .85rem; }
@@ -699,6 +699,71 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 
 .poll-login { margin: 16px 0 0; padding: 12px 16px; border-radius: 12px; background: var(--bg-2); border: 1px dashed var(--gold); font-size: .92rem; }
 .poll-login a { color: var(--gold-2); font-weight: 700; }
+
+/* ---------- anel de tempo de assinatura (2º ano prata, 3º+ ouro) ---------- */
+.olive.tempo-ouro { filter: drop-shadow(0 0 2px rgba(242, 201, 76, .8)); }
+.olive.tempo-ouro:hover, .olive.tempo-ouro.is-active { filter: brightness(1.35) drop-shadow(0 0 5px #f2c94c); }
+.jar-legend { display: flex; justify-content: center; gap: 16px; margin: 6px 0 0; font-size: .72rem; color: var(--muted); opacity: .8; }
+.jar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.ring-dot { width: 12px; height: 12px; border-radius: 50%; border: 2.5px solid; background: transparent; }
+.ring-dot.ring-prata { border-color: #c3cad2; }
+.ring-dot.ring-ouro { border-color: #f2c94c; box-shadow: 0 0 5px rgba(242, 201, 76, .7); }
+.tempo-prata { box-shadow: 0 0 0 2px #c3cad2; }
+.tempo-ouro { box-shadow: 0 0 0 2px #f2c94c, 0 0 10px rgba(242, 201, 76, .55); }
+.profile-photo.tempo-prata { box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px #c3cad2, 0 18px 30px rgba(0,0,0,.45); }
+.profile-photo.tempo-ouro { box-shadow: 0 0 0 6px var(--surface), 0 0 0 10px #f2c94c, 0 0 28px rgba(242, 201, 76, .6), 0 18px 30px rgba(0,0,0,.45); }
+.cert-tempo { display: inline-block; margin-top: 6px; font-size: .78rem; font-weight: 700; padding: .2em .8em; border-radius: 99px; background: #e8dfc7; color: var(--dark); }
+.cert-tempo-prata { background: linear-gradient(135deg, #f4f6f8, #c3cad2); color: #3a4048; }
+.cert-tempo-ouro { background: linear-gradient(135deg, #fff4b8, #f2c94c); color: #5a4203; }
+.profile-badges .badge-tempo-prata { border-color: #c3cad2; color: #e3e7eb; }
+.profile-badges .badge-tempo-ouro { border-color: #f2c94c; color: #f7d977; box-shadow: 0 0 10px rgba(242, 201, 76, .25); }
+.profile-badges .badge-provoc { border-color: #ff6a3d; color: #ffb08a; }
+.profile-badges .badge-vencido { border-color: #7a2f26; color: #f3c6bd; }
+
+/* ---------- renovação ---------- */
+.profile-validity .validity-rule { font-size: .82rem; }
+.profile-validity .btn { align-self: flex-start; margin-top: 4px; }
+.profile-validity.is-soon { padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--gold) 12%, transparent); border: 1px solid var(--gold); color: var(--text); }
+.profile-validity.is-expired { padding: 12px 14px; border-radius: 14px; background: #3a1a17; border: 1px solid #7a2f26; color: #f3c6bd; }
+.renew-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); margin-bottom: 12px; }
+.renew-item svg { width: 56px; height: 40px; flex: none; }
+.renew-item small { display: block; color: var(--muted); }
+.renew-ok, .renew-warn { margin: 0 0 6px; padding: 10px 14px; border-radius: 12px; font-size: .92rem; line-height: 1.5; }
+.renew-ok { background: #1f3320; border: 1px solid #3f6b40; }
+.renew-warn { background: #3a2f12; border: 1px solid #6b5720; }
+
+/* ---------- provocadores do mês ---------- */
+.provoc-tag {
+  display: inline-block; margin: 2px 0; font-size: .68rem; font-weight: 700; white-space: nowrap;
+  padding: .15em .6em; border-radius: 99px; color: #2a0a04;
+  background: linear-gradient(90deg, #ffb347, #ff6a3d); box-shadow: 0 0 10px rgba(255, 106, 61, .35);
+}
+.olive-tip .provoc-tag { margin-top: 4px; }
+.provocadores h3 { margin-bottom: 4px; }
+.prov-sub { margin: 0 0 12px; font-size: .8rem; color: var(--muted); }
+.prov-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.prov-list li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; }
+.prov-list li.first { background: color-mix(in srgb, #ff6a3d 14%, transparent); border: 1px solid rgba(255, 106, 61, .5); }
+.prov-pos { width: 26px; text-align: center; font-weight: 800; color: var(--muted); }
+.prov-list li.first .prov-pos { font-size: 1.2rem; }
+.prov-avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: .75rem; font-weight: 700; color: #1f2610; }
+.prov-name { min-width: 0; }
+.prov-name small { display: block; color: var(--muted); font-size: .76rem; }
+.prov-empty { color: var(--muted); font-size: .88rem; }
+
+/* ---------- resposta em vídeo nos comentários ---------- */
+.comment-input { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.comment-input input { width: 100%; }
+.comment-hint { font-size: .72rem; color: var(--muted); padding-left: 12px; }
+.comment-hint.on { color: var(--gold-2); font-weight: 700; }
+.comment-video { margin-top: 8px; max-width: 360px; }
+.comment-video.is-playing { max-width: none; }
+.comment-video .play-btn { width: 46px; height: 46px; }
+.comment-video .play-btn::after { left: 18px; top: 13px; border-left-width: 14px; border-top-width: 10px; border-bottom-width: 10px; }
+.made-video { display: inline-block; margin-top: 8px; font-size: .8rem; font-weight: 700; color: var(--gold-2); }
+
+@media (max-width: 1000px) { .ranking-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .ranking-grid { grid-template-columns: 1fr; } }
 
 /* ---------- login ---------- */
 .login-link { color: var(--text); text-decoration: none; font-weight: 600; font-size: .9rem; padding: .45em .9em; border-radius: 99px; border: 1px solid var(--line); }

@@ -63,6 +63,24 @@
   const money = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const scaleOf = (o) => S.scales[o.tipo] || 1;
 
+  // ---------- tempo de assinatura (mesma conta de ano_de_assinatura()/anel_de_tempo() no PHP) ----------
+  const addYear = (iso, n = 1) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y + n, m - 1, d)).toISOString().slice(0, 10); // 29/02 + 1 ano → 01/03, como no PHP
+  };
+  const anoDe = (o) => {
+    const [y, m, d] = o.desde.split('-').map(Number);
+    const [ty, tm, td] = todayIso().split('-').map(Number);
+    return ty - y - (tm < m || (tm === m && td < d) ? 1 : 0) + 1;
+  };
+  const anelDe = (o) => { const a = anoDe(o); return a >= 3 ? 'ouro' : a === 2 ? 'prata' : ''; };
+  const ANEL = { prata: '🥈', ouro: '🥇' };
+  const tempoTexto = (o) => `${anelDe(o) ? ANEL[anelDe(o)] + ' ' : ''}${anoDe(o)}º ano no pote`;
+  const validade = (o) => o.valido_ate || addYear(o.desde);
+  const vencido = (o) => validade(o) < todayIso();
+  const noPote = () => olives.filter((o) => !vencido(o)); // vencidos saem do pote e do mural
+  const diasAte = (iso) => Math.round((new Date(iso + 'T12:00:00') - new Date(todayIso() + 'T12:00:00')) / 86400000);
+
   // desenho do item como <svg> avulso (certificado, etc.)
   const itemSvg = (tipo, side = SIDE, scale = 1) =>
     `<svg viewBox="-24 -17 48 34" aria-hidden="true"><g transform="scale(${scale})">${DC.sides[side].shapes[tipo] || ''}</g></svg>`;
@@ -124,15 +142,15 @@
   }
 
   // quando o pote lota, mostra os mais recentes (quem acabou de comprar sempre aparece)
-  const jarOffset = () => Math.max(0, olives.length - MAX_IN_JAR);
-  const slotOf = (o) => olives.indexOf(o) - jarOffset();
+  const jarOffset = () => Math.max(0, noPote().length - MAX_IN_JAR);
+  const slotOf = (o) => noPote().indexOf(o) - jarOffset();
 
   function oliveNode(o, i, animate) {
     const { x, y } = olivePosition(i);
     const pos = document.createElementNS(SVG, 'g');
     pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scaleOf(o) * L.itemScale})`);
     const g = document.createElementNS(SVG, 'g');
-    g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : ''));
+    g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : '') + (anelDe(o) ? ' tempo-' + anelDe(o) : ''));
     g.dataset.id = o.id;
     g.innerHTML = oliveInner(o);
     pos.appendChild(g);
@@ -140,7 +158,11 @@
   }
 
   function oliveInner(o) {
-    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
+    const anel = anelDe(o);
+    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}` +
+      // anel de tempo: 2º ano prata, 3º+ ouro
+      (anel ? `<ellipse class="tempo-ring" rx="${S.ring[0]}" ry="${S.ring[1]}" cx="${SIDE === 'esquerda' ? 1 : 0}" fill="none" stroke="url(#ring-${anel})" stroke-width="${anel === 'ouro' ? 2.6 : 2.1}"/>` : '') +
+      '</g>' +
       (o.selo ? seloSvg(o.selo) : '') +
       // selo de play (fora da rotação, para o triângulo ficar sempre de pé)
       (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '');
@@ -157,14 +179,14 @@
   function renderJar() {
     const layer = $('#jar-items');
     layer.innerHTML = '';
-    const inJar = olives.slice(jarOffset()).map((o, i) => [o, i]);
+    const inJar = noPote().slice(jarOffset()).map((o, i) => [o, i]);
     // as maiores são desenhadas por último para ficarem por cima das vizinhas
     const ordered = [...inJar.filter(([o]) => scaleOf(o) <= 1), ...inJar.filter(([o]) => scaleOf(o) > 1)];
     ordered.forEach(([o, i]) => layer.appendChild(oliveNode(o, i, false)));
   }
 
   function dropOlive(o) {
-    if (olives.length > MAX_IN_JAR) {
+    if (noPote().length > MAX_IN_JAR) {
       // pote cheio: todos andam uma casa e o novo cai no topo
       renderJar();
       $(`.olive[data-id="${o.id}"]`)?.classList.add('drop');
@@ -207,7 +229,7 @@
       el.classList.add('is-active');
       const v = videoOf(o);
       tip.innerHTML =
-        `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)}</small></div></div>` +
+        `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)} · ${tempoTexto(o)}</small>${provocadorTag(o.id)}</div></div>` +
         `<q>${esc(o.frase)}</q>` +
         (DC.profileId === o.id ? '' : `<a class="tip-profile" href="${profileUrl(SIDE, o.id)}">Ver perfil →</a>`) +
         (v ? `<div class="tip-video">${videoCoverHtml(v)}</div>` : '');
@@ -302,11 +324,11 @@
 
   function updateStats() {
     const set = (sel, v) => { const el = $(sel); if (el) el.textContent = v.toLocaleString('pt-BR'); };
-    set('#stat-total', olives.length);
-    set('#stat-hoje', olives.filter((o) => o.desde === todayIso()).length);
-    set('#jar-count', olives.length);
+    set('#stat-total', noPote().length);
+    set('#stat-hoje', noPote().filter((o) => o.desde === todayIso()).length);
+    set('#jar-count', noPote().length);
     const meter = $('#jar-meter');
-    if (meter) meter.style.width = Math.max(0.5, (olives.length / DC.capacity) * 100) + '%';
+    if (meter) meter.style.width = Math.max(0.5, (noPote().length / DC.capacity) * 100) + '%';
   }
 
   // ---------- modais ----------
@@ -331,6 +353,7 @@
       <div class="cert-photo">${avatarWithSelo(o, 'cert-avatar')}${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</div>
       <div class="cert-name">${esc(o.nome)}</div>
       <div class="cert-since">${esc(S.cert_since)}<b>${fmtDate(o.desde)}</b></div>
+      <div class="cert-tempo${anelDe(o) ? " cert-tempo-" + anelDe(o) : ""}">${tempoTexto(o)}</div>
       <q>${esc(o.frase)}</q>
       <div class="cert-foot"><span>${esc(S.Item)} ${numero(o.id)} · ${esc(typeLabel(o.tipo))}</span><span>${esc(o.cidade)}/${esc(o.uf)}</span></div>
     </div>`;
@@ -742,7 +765,7 @@
     resetCart();
   });
 
-  function renderFakeQr() {
+  function renderFakeQr(sel = '#qr') {
     // QR decorativo: 3 "olhos" nos cantos + ruído aleatório
     const N = 21;
     const corners = [[0, 0], [0, N - 7], [N - 7, 0]];
@@ -758,7 +781,7 @@
     };
     let html = '';
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) html += `<i class="${cell(r, c) ? '' : 'o'}"></i>`;
-    $('#qr').innerHTML = html;
+    $(sel).innerHTML = html;
   }
 
   // ---------- vídeos (YouTube / TikTok) ----------
@@ -797,24 +820,30 @@
       : `https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0&playsinline=1`;
   }
 
-  function stopVideo(post) {
-    const v = JSON.parse(post.dataset.video);
-    $('.post-video', post).innerHTML = videoCoverHtml(v);
-    post.classList.remove('is-playing');
+  // "box" = caixa de vídeo de um post (.post-video) ou de um comentário (.comment-video), com data-video
+  function stopVideo(box) {
+    box.innerHTML = videoCoverHtml(JSON.parse(box.dataset.video));
+    box.classList.remove('is-playing');
+    const post = box.closest('.post');
+    if (post && !post.querySelector('[data-video].is-playing')) post.classList.remove('is-playing');
   }
 
-  function playVideo(post) {
-    $$('.post.is-playing').forEach(stopVideo); // um vídeo por vez
-    const v = JSON.parse(post.dataset.video);
-    post.classList.add('is-playing');
-    $('.post-video', post).innerHTML =
+  function playVideo(box) {
+    $$('[data-video].is-playing').forEach(stopVideo); // um vídeo por vez
+    const v = JSON.parse(box.dataset.video);
+    const post = box.closest('.post');
+    box.classList.add('is-playing');
+    post?.classList.add('is-playing'); // o quadro do post alarga, também para vídeo de comentário
+    box.innerHTML =
       `<div class="video-frame${v.vertical ? ' vertical' : ''}">
         <iframe src="${videoEmbedSrc(v)}" title="Vídeo do ${providerName(v)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>
       </div>
       <button class="video-close" data-stop>Fechar vídeo</button>`;
     // espera o quadro expandir antes de rolar até ele
-    requestAnimationFrame(() => post.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+    requestAnimationFrame(() => box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
   }
+
+  const videoBoxHtml = (cls, v) => `<div class="${cls}" data-video="${esc(JSON.stringify(v))}">${videoCoverHtml(v)}</div>`;
 
   // ---------- mural ----------
   const PAGE = 12;
@@ -822,7 +851,7 @@
   let shown = PAGE;
 
   function allPosts() {
-    const fromOlives = olives.filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
+    const fromOlives = noPote().filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
     let list = [...extra, ...fromOlives];
     if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
@@ -835,6 +864,46 @@
   // ---------- comentários (os dois lados podem comentar) ----------
   const openComments = new Set();
   const commentsOf = (postId) => [...DC.comments, ...myComments].filter((c) => c.post === postId);
+  // ---------- Provocador(a) do mês: quem mais recebeu comentários do OUTRO pote neste mês ----------
+  // (mesma regra de provocadores_do_mes() no PHP)
+  const mesNome = () => new Date().toLocaleDateString('pt-BR', { month: 'long' });
+  function donoDoPost(postId) {
+    const m = postId.match(new RegExp(`^${SIDE}-o(\\d+)$`));
+    if (m) return Number(m[1]);
+    return myPosts.find((p) => p.id === postId)?.oliveId ?? null;
+  }
+  let provocadoresCache = null;
+  function provocadores() {
+    if (provocadoresCache) return provocadoresCache;
+    const mes = todayIso().slice(0, 7);
+    const cont = new Map();
+    for (const c of [...DC.comments, ...myComments]) {
+      if (c.autor.side === SIDE || !c.post.startsWith(SIDE + '-') || (c.data || '').slice(0, 7) !== mes) continue;
+      const o = byId(donoDoPost(c.post));
+      if (!o || vencido(o)) continue;
+      cont.set(o.id, (cont.get(o.id) || 0) + 1);
+    }
+    return (provocadoresCache = [...cont].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ o: byId(id), n })));
+  }
+  const provocadorTag = (id) => (provocadores()[0]?.o.id === id
+    ? `<span class="provoc-tag" title="Quem mais recebeu comentários do outro pote em ${mesNome()}">🔥 Provocador(a) do mês</span>`
+    : '');
+
+  function renderProvocadores() {
+    const box = $('#provocadores');
+    if (!box) return;
+    const top = provocadores().slice(0, 5);
+    $('#provocadores-mes').textContent = mesNome();
+    box.innerHTML = top.length
+      ? top.map(({ o, n }, i) => `<li${i === 0 ? ' class="first"' : ''}>
+          <span class="prov-pos">${i === 0 ? '🔥' : `${i + 1}º`}</span>
+          ${avatarWithSelo(o, 'prov-avatar')}
+          <span class="prov-name"><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a>
+            <small>${OTHER.emoji} ${n} ${n === 1 ? 'comentário' : 'comentários'} de quem é ${esc(OTHER.name)}</small></span>
+        </li>`).join('')
+      : `<li class="prov-empty">Ninguém provocou o outro lado este mês… ainda.</li>`;
+  }
+
   const themeVars = (sd) => Object.entries(sd.theme).map(([k, v]) => `--${k}:${v}`).join(';');
 
   function commentsButton(postId) {
@@ -852,7 +921,8 @@
       ${avatarWithSelo(a, 'comment-avatar')}
       <div class="comment-body">
         <div class="comment-head">${a.id ? `<a class="name-link" href="${profileUrl(a.side, a.id)}">${esc(a.nome)}</a>` : `<b>${esc(a.nome)}</b>`}${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
-        <p>${esc(c.texto)}</p>
+        ${c.texto ? `<p>${esc(c.texto)}</p>` : ''}
+        ${c.video ? videoBoxHtml('comment-video', c.video) : ''}
       </div>
     </div>`;
   }
@@ -867,8 +937,11 @@
     const sd = DC.sides[eu.side];
     return `<form class="comment-form" data-post="${postId}">
       ${avatarWithSelo(eu, 'comment-avatar')}
-      <input name="texto" maxlength="200" required autocomplete="off"
-        placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})…">
+      <div class="comment-input">
+        <input name="texto" maxlength="400" autocomplete="off"
+          placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})… ou cole um link de vídeo">
+        <small class="comment-hint">Responda com texto ou com um vídeo do YouTube/TikTok (é só colar o link).</small>
+      </div>
       <button class="btn btn-gold btn-sm">Enviar</button>
     </form>`;
   }
@@ -888,15 +961,14 @@
 
   function postHtml(p) {
     const o = byId(p.oliveId);
-    const video = p.video ? ` data-video="${esc(JSON.stringify(p.video))}"` : '';
     const open = openComments.has(p.id);
-    return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}"${video}>
+    return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}">
       <div class="post-head">
-        ${avatarWithSelo(o, 'post-avatar')}
-        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a><small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
+        ${avatarWithSelo(o, 'post-avatar' + (anelDe(o) ? ' tempo-' + anelDe(o) : ''))}
+        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
-      ${p.video ? `<div class="post-video">${videoCoverHtml(p.video)}</div>` : ''}
+      ${p.video ? videoBoxHtml('post-video', p.video) : ''}
       <div class="post-actions">
         <button data-like="${p.id}" class="${liked.has(p.id) ? 'liked' : ''}">${S.emoji} ${likesOf(p)}</button>
         <button data-toggle-comments="${p.id}" class="${open ? 'active' : ''}">${commentsButton(p.id)}</button>
@@ -913,21 +985,37 @@
     $('#feed-more').hidden = shown >= posts.length;
   }
 
+  // ao colar um link no comentário, avisa que vai como resposta em vídeo
+  $('#feed').addEventListener('input', (e) => {
+    const input = e.target.closest('.comment-form input[name="texto"]');
+    if (!input) return;
+    const { video, text } = extractVideo(input.value);
+    const hint = input.parentElement.querySelector('.comment-hint');
+    hint.classList.toggle('on', !!video);
+    hint.textContent = video
+      ? `▶ Resposta em vídeo do ${providerName(video)}${text ? ' + texto' : ''}`
+      : 'Responda com texto ou com um vídeo do YouTube/TikTok (é só colar o link).';
+  });
+
   $('#feed').addEventListener('submit', (e) => {
     const form = e.target.closest('.comment-form');
     if (!form) return;
     e.preventDefault();
     const eu = me();
-    const texto = form.elements.texto.value.trim();
-    if (!eu || !texto) return;
+    const { video, text } = extractVideo(form.elements.texto.value); // link de vídeo vira resposta em vídeo
+    if (!eu || (!text && !video)) return;
+    if (text.length > 200) { toast('Comentário: até 200 caracteres (sem contar o link do vídeo)'); return; }
     myComments.push({
       post: form.dataset.post,
       autor: { id: eu.id, side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
-      texto,
+      texto: text || null,
+      video,
       data: todayIso(),
     });
     store.set('comments', myComments);
+    provocadoresCache = null; // o ranking do mês pode mudar
     refreshComments(form.dataset.post);
+    renderProvocadores();
     $(`.post[data-post-id="${form.dataset.post}"] .comment-form input`)?.focus();
   });
 
@@ -954,8 +1042,8 @@
       box.hidden = !open;
       if (open) $('input', box)?.focus({ preventScroll: true });
     }
-    if (e.target.closest('[data-play]')) playVideo(e.target.closest('.post'));
-    if (e.target.closest('[data-stop]')) stopVideo(e.target.closest('.post'));
+    if (e.target.closest('[data-play]')) playVideo(e.target.closest('[data-video]'));
+    if (e.target.closest('[data-stop]')) stopVideo(e.target.closest('[data-video]'));
     if (like) {
       const id = like.dataset.like;
       liked.has(id) ? liked.delete(id) : liked.add(id);
@@ -1080,7 +1168,7 @@
         ${p.duelo && !voted ? `<p class="poll-desc">Seu voto conta para o time ${S.emoji} ${esc(S.name)}.</p>` : ''}
       </div>
       ${body}
-      ${!DC.logado && !voted ? `<p class="poll-login">🔒 Só quem está logado vota — um voto por pessoa. <a href="${esc(DC.loginUrl)}">Entrar para votar</a> (sem senha, pelo e-mail).</p>` : ''}
+      ${!DC.logado && !voted ? `<p class="poll-login">🔒 Só quem está logado pode votar.</p>` : ''}
       <p class="poll-foot">${p.total !== null ? `${p.total.toLocaleString('pt-BR')} ${p.total === 1 ? 'voto' : 'votos'}` : 'Resultado oculto até o fim'}${fim}</p>`;
   }
 
@@ -1107,7 +1195,6 @@
   });
 
   // ---------- perfil (perfil.php) ----------
-  const addYear = (iso) => { const [y, m, d] = iso.split('-'); return `${Number(y) + 1}-${m}-${d}`; };
 
   // capa com itens do pote espalhados
   function coverPattern() {
@@ -1156,10 +1243,16 @@
     const made = [...DC.comments, ...myComments].filter((c) => c.autor.side === SIDE && c.autor.id === o.id);
     const madeOther = made.filter((c) => !c.post.startsWith(SIDE + '-'));
     const likes = posts.reduce((n, p) => n + likesOf(p), 0);
-    const validade = o.valido_ate || addYear(o.desde);
+    const vale = validade(o);
+    const venceu = vencido(o);
+    const faltam = diasAte(vale);
+    const anel = anelDe(o);
+    const preco = money(S.types[o.tipo].price);
 
     const badges = [
       isMine && ['voce', '★ Este é você'],
+      venceu ? ['vencido', '⏳ Fora do pote (venceu)'] : [`tempo-${anel || 'normal'}`, tempoTexto(o)],
+      provocadores()[0]?.o.id === o.id && ['provoc', `🔥 Provocador(a) do mês de ${mesNome()}`],
       o.id <= 100 && ['fundador', `🏅 ${o.id <= 10 ? 'Fundador(a) top 10' : 'Fundador(a)'}`],
       scaleOf(o) > 1 && ['grande', `${S.emoji} ${S.Item} ${typeLabel(o.tipo)}`],
       videoOf(o) && ['video', '🎬 Publica vídeos'],
@@ -1171,7 +1264,7 @@
     card.innerHTML = `
       <div class="profile-cover">${coverPattern()}<span class="profile-number">${numero(o.id)}</span></div>
       <div class="profile-main">
-        <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo')}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
+        <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo' + (anel && !venceu ? ' tempo-' + anel : ''))}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
         <div class="profile-id">
           <h1>${esc(o.nome)}</h1>
           <p class="profile-meta">📍 ${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.Item)} ${esc(typeLabel(o.tipo))}</p>
@@ -1182,10 +1275,18 @@
         </div>
         <blockquote class="profile-quote">“${esc(o.frase)}”</blockquote>
         ${badges.length ? `<ul class="profile-badges">${badges.map(([k, t]) => `<li class="badge-${k}">${esc(t)}</li>`).join('')}</ul>` : ''}
-        ${isMine ? `<div class="profile-validity">
-          <span>Sua ${S.item} fica no pote até <b>${fmtDate(validade)}</b></span>
-          <span class="validity-bar"><i style="width:${Math.min(100, Math.max(3, ((Date.now() - new Date(o.desde)) / (new Date(validade) - new Date(o.desde))) * 100)).toFixed(0)}%"></i></span>
-        </div>` : ''}
+        ${isMine ? (venceu
+          ? `<div class="profile-validity is-expired">
+              <span>⏳ Sua ${S.item} venceu em <b>${fmtDate(vale)}</b> e saiu do pote.</span>
+              <span>Renovando agora ela volta, mas a data <b>recomeça</b>: “${esc(S.cert_since)} ${fmtDate(todayIso())}”.</span>
+              <button class="btn btn-gold btn-sm" type="button" data-renew="${o.id}">Voltar ao pote · ${preco}</button>
+            </div>`
+          : `<div class="profile-validity${faltam <= 30 ? ' is-soon' : ''}">
+              <span>Sua ${S.item} fica no pote até <b>${fmtDate(vale)}</b>${faltam <= 30 ? ` — <b>faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}</b>` : ''}.</span>
+              <span class="validity-bar"><i style="width:${Math.min(100, Math.max(3, (1 - faltam / 365) * 100)).toFixed(0)}%"></i></span>
+              <span class="validity-rule">Renovando antes de vencer, continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anel ? ` e com o anel de ${anel}` : ''}. Se vencer, a data recomeça do zero.</span>
+              <button class="btn btn-ghost btn-sm" type="button" data-renew="${o.id}">Renovar por +1 ano · ${preco}</button>
+            </div>`) : ''}
         <div class="profile-actions">
           <button class="btn btn-gold" type="button" data-view="${o.id}">Ver certificado</button>
           <button class="btn btn-ghost" type="button" data-share-profile>Compartilhar perfil</button>
@@ -1212,7 +1313,7 @@
             ${away ? `<span class="side-tag">${sd.emoji} no pote ${esc(sd.name)}</span>` : '<span class="made-here">neste pote</span>'}
             ${ctx ? `em resposta a <a class="name-link" href="${profileUrl(ctx.side, ctx.o.id)}">${esc(nomeProprio(ctx.o.nome))}</a>: <q>${esc(ctx.text)}</q>` : ''}
           </div>
-          <p>${esc(c.texto)}</p>
+          ${c.texto ? `<p>${esc(c.texto)}</p>` : ''}${c.video ? `<span class="made-video">🎬 Respondeu com vídeo do ${providerName(c.video)}</span>` : ''}
         </article>`;
       }).join('')
       : `<p class="comment-empty">${esc(o.nome.split(' ')[0])} ainda não comentou em nenhum post.</p>`;
@@ -1242,6 +1343,46 @@
       }).join('');
     }
   }
+
+  // ---------- renovação (mesma regra de renovar_item() no PHP) ----------
+  // Em dia: +1 ano a partir do vencimento, mantendo o "desde". Vencido: recomeça hoje.
+  let renewing = null;
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-renew]');
+    if (!btn) return;
+    const o = mine.find((m) => m.id === Number(btn.dataset.renew));
+    if (!o) return;
+    renewing = o;
+    const emDia = !vencido(o);
+    const novaValidade = emDia ? addYear(validade(o)) : addYear(todayIso());
+    $('#renew-body').innerHTML = `
+      <div class="renew-item">${itemSvg(o.tipo)}<span><b>${esc(o.nome)}</b><small>${esc(S.Item)} ${esc(typeLabel(o.tipo))} · ${numero(o.id)}</small></span></div>
+      ${emDia
+        ? `<p class="renew-ok">✓ Continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anelDe(o) ? ` e com o anel de ${anelDe(o)}` : ''}.<br>Nova validade: <b>${fmtDate(novaValidade)}</b>.</p>`
+        : `<p class="renew-warn">⚠ Venceu em ${fmtDate(validade(o))}, então a data recomeça: <b>“${esc(S.cert_since)} ${fmtDate(todayIso())}”</b>.<br>Validade: <b>${fmtDate(novaValidade)}</b>.</p>`}`;
+    $('#renew-price').innerHTML = `${money(S.types[o.tipo].price)}<small>/ano</small>`;
+    renderFakeQr('#renew-qr');
+    openModal('#renew-modal');
+  });
+
+  $('#renew-pay')?.addEventListener('click', () => {
+    const o = renewing;
+    if (!o) return;
+    const manteve = !vencido(o);
+    if (manteve) {
+      o.valido_ate = addYear(validade(o));
+    } else {
+      o.desde = todayIso();
+      o.valido_ate = addYear(todayIso());
+    }
+    store.set(`${SIDE}_mine`, mine);
+    closeModals();
+    toast(manteve ? `Renovada! Continua desde ${fmtDate(o.desde)}.` : `De volta ao pote! Agora desde ${fmtDate(o.desde)}.`);
+    if ($('#jar')) renderJar();
+    updateStats();
+    renderFeed();
+    if (DC.profileId !== undefined) renderProfile();
+  });
 
   document.addEventListener('click', async (e) => {
     if (!e.target.closest('[data-share-profile]')) return;
@@ -1274,6 +1415,7 @@
   updateComposer();
   updateMyProfileLink();
   renderPoll();
+  renderProvocadores();
   if (DC.profileId !== undefined) renderProfile();
 
   // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado

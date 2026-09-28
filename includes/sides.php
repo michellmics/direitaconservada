@@ -41,6 +41,7 @@ const SIDES = [
             'grande'   => ['label' => 'Grande',   'price' => 29.90],
         ],
         'scales' => ['grande' => 1.5],
+        'ring'   => [19.5, 15],          // anel de tempo em volta do item (raios x/y)
         'selos' => [
             'br' => 'Bandeira do Brasil', '✝️' => 'Fé', '🙏' => 'Oração', '⭐' => 'Estrela',
             '🦅' => 'Águia', '🐂' => 'Agro', '🌾' => 'Campo', '🛡️' => 'Defesa',
@@ -100,6 +101,7 @@ const SIDES = [
             'grande'    => ['label' => 'Grande',       'price' => 29.90],
         ],
         'scales' => ['grande' => 1.5, 'biquinho' => .85],
+        'ring'   => [23.5, 10.5],
         'selos' => [
             'br' => 'Bandeira do Brasil', '✊' => 'Luta', '🌹' => 'Rosa', '❤️' => 'Coração',
             '⭐' => 'Estrela', '🌎' => 'Mundo', '📚' => 'Educação', '🌱' => 'Natureza',

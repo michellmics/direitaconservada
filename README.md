@@ -75,3 +75,12 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 
 > Antivírus com "proteção de e-mail" (ex.: Norton Mail Shield) interceptam o SMTP com certificado próprio e o PHP
 > recusa a conexão. Em produção isso não acontece; localmente, desative a verificação de e-mail do antivírus para o PHP.
+
+## Assinatura anual, anéis de tempo e provocadores
+
+- **Anel de tempo**: 1º ano normal, 2º ano anel de **prata**, 3º ano ou mais anel de **ouro** (no pote, no balão, na foto, no certificado e no perfil).
+  Conta pelo `desde` do item (`ano_de_assinatura()` / `anel_de_tempo()` em `includes/config.php`).
+- **"Desde" preservado**: `renovar_item()` (`includes/itens.php`) — renovando **em dia**, soma 1 ano à validade e mantém o `desde`;
+  **vencido**, recomeça (`desde` = hoje). `expirar_itens()` tira do pote quem passou da validade (rodar 1x por dia).
+- **Provocador(a) do mês**: `provocadores_do_mes()` — quem mais recebeu comentários de gente do outro pote no mês. O 1º ganha o selo 🔥.
+- **Resposta em vídeo**: colar um link do YouTube/TikTok no comentário vira resposta em vídeo (migration 004).

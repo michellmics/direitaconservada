@@ -102,12 +102,23 @@ function mock_items(string $side): array
             'uf'     => $uf,
             'tipo'   => $types[mt_rand(0, count($types) - 1)],
             'frase'  => $phrases[mt_rand(0, count($phrases) - 1)],
-            'desde'  => date('Y-m-d', $start + (int) (($i / $total) * (time() - $start))),
+            // os primeiros são assinantes antigos (anel de ouro/prata no pote); o resto entrou em 2026
+            'desde'  => date('Y-m-d', match (true) {
+                $i <= 12 => strtotime('2024-02-01') + $i * 17 * 86400,
+                $i <= 30 => strtotime('2025-01-15') + ($i - 12) * 13 * 86400,
+                default  => $start + (int) (($i / $total) * (time() - $start)),
+            }),
             'likes'  => mt_rand(0, 420),
             'selo'   => mt_rand(1, 100) <= 40 ? $selos[mt_rand(0, count($selos) - 1)] : null,
         ];
     }
     mt_srand();
+
+    // validade: todos em dia (renovaram todo ano) → vence no próximo aniversário da entrada
+    foreach ($items as &$it) {
+        $it['valido_ate'] = proximo_aniversario($it['desde']);
+    }
+    unset($it);
 
     // um post com vídeo para demonstrar o player no mural
     $items[$total - 1]['video'] = ['provider' => 'youtube', 'id' => 'jNQXAC9IVRw', 'vertical' => false];
@@ -149,11 +160,24 @@ function mock_comments(string $side, array $items): array
                 'post'  => "$side-o{$it['id']}",
                 'autor' => array_intersect_key($author, array_flip(['id', 'side', 'nome', 'foto', 'tipo', 'selo'])),
                 'texto' => $texts[mt_rand(0, count($texts) - 1)],
-                'data'  => $it['desde'],
+                // comentários do mês atual (alimentam o "Provocador(a) do mês")
+                'data'  => date('Y-m-') . str_pad((string) mt_rand(1, (int) date('j')), 2, '0', STR_PAD_LEFT),
             ];
         }
     }
     mt_srand();
+
+    // uma resposta em vídeo, vinda do outro pote, no 2º post mais recente (aparece logo no mural)
+    if ($out) {
+        $autor = $theirs[4];
+        $out[] = [
+            'post'  => $side . '-o' . (count($items) - 1),
+            'autor' => array_intersect_key($autor, array_flip(['id', 'side', 'nome', 'foto', 'tipo', 'selo'])),
+            'texto' => 'Respondo com este vídeo 👇',
+            'video' => ['provider' => 'youtube', 'id' => 'jNQXAC9IVRw', 'vertical' => false],
+            'data'  => date('Y-m-d'),
+        ];
+    }
     return $out;
 }
 

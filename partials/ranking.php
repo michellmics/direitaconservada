@@ -19,6 +19,11 @@ $oldest = array_slice($items, 0, 5);
         </li>
       <?php endforeach; ?>
     </ol>
+    <div class="provocadores">
+      <h3>🔥 Provocadores do mês</h3>
+      <p class="prov-sub">Quem mais recebeu comentários de quem é <?= e(side($S['other'])['name']) ?> <?= side($S['other'])['emoji'] ?> em <span id="provocadores-mes"><?= e(date('m/Y')) ?></span>. O 1º ganha o selo de Provocador(a) do mês.</p>
+      <ol class="prov-list" id="provocadores"></ol>
+    </div>
     <div class="oldest">
       <h3>Os mais antigos do pote</h3>
       <ul>

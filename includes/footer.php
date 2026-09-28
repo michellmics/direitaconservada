@@ -11,7 +11,7 @@
   foreach (SIDES as $slug => $sd) {
       $sidesForJs[$slug] = array_intersect_key($sd, array_flip([
           'slug', 'name', 'name_a', 'name_b', 'other', 'emoji', 'item', 'items', 'Item', 'since',
-          'cert_title', 'cert_since', 'members', 'types', 'scales', 'shapes', 'defs', 'theme', 'jar',
+          'cert_title', 'cert_since', 'members', 'types', 'scales', 'shapes', 'defs', 'theme', 'jar', 'ring',
       ]));
   }
   ?>

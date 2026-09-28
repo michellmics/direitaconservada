@@ -15,51 +15,51 @@ $email = '';
 $link = null;
 
 try {
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!csrf_publico_ok($_POST['csrf'] ?? null)) {
-            $erro = 'A página ficou aberta tempo demais. Tente de novo.';
-        } elseif (($_POST['acao'] ?? '') === 'pedir') {
-            $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
-            $nome  = trim((string) ($_POST['nome'] ?? ''));
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
-                $erro = 'Confira o e-mail digitado.';
-            } elseif (mb_strlen($nome) > 60) {
-                $erro = 'O nome pode ter até 60 caracteres.';
-            } else {
-                $res = pedir_link($email, $nome, $r);
-                if (isset($res['token'])) {
-                    require_once __DIR__ . '/includes/mailer.php';
-                    $url = rtrim((string) env('APP_URL', 'http://localhost:8080'), '/')
-                        . '/entrar.php?token=' . $res['token'] . '&lado=' . $S['slug'];
-                    [$assunto, $html, $texto] = email_link_login($S, nome_proprio($res['usuario']['nome']), $url);
-                    if (enviar_email($email, nome_proprio($res['usuario']['nome']), $assunto, $html, $texto) !== null) {
-                        $erro = 'Não conseguimos enviar o e-mail agora. Tente de novo em alguns minutos.';
-                    } else {
-                        $tela = 'enviado';
-                    }
-                } elseif ($res['erro'] === 'bloqueado') {
-                    $tela = 'enviado'; // não revela que a conta está bloqueada
-                } else {
-                    $erro = $res['erro'];
-                }
-            }
-        } elseif (($_POST['acao'] ?? '') === 'entrar') {
-            $destino = usar_link((string) ($_POST['token'] ?? ''));
-            if ($destino !== null) {
-                header('Location: ' . $destino);
-                exit;
-            }
-            $tela = 'invalido';
+  if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_publico_ok($_POST['csrf'] ?? null)) {
+      $erro = 'A página ficou aberta tempo demais. Tente de novo.';
+    } elseif (($_POST['acao'] ?? '') === 'pedir') {
+      $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
+      $nome  = trim((string) ($_POST['nome'] ?? ''));
+      if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 190) {
+        $erro = 'Confira o e-mail digitado.';
+      } elseif (mb_strlen($nome) > 60) {
+        $erro = 'O nome pode ter até 60 caracteres.';
+      } else {
+        $res = pedir_link($email, $nome, $r);
+        if (isset($res['token'])) {
+          require_once __DIR__ . '/includes/mailer.php';
+          $url = rtrim((string) env('APP_URL', 'http://localhost:8080'), '/')
+            . '/entrar.php?token=' . $res['token'] . '&lado=' . $S['slug'];
+          [$assunto, $html, $texto] = email_link_login($S, nome_proprio($res['usuario']['nome']), $url);
+          if (enviar_email($email, nome_proprio($res['usuario']['nome']), $assunto, $html, $texto) !== null) {
+            $erro = 'Não conseguimos enviar o e-mail agora. Tente de novo em alguns minutos.';
+          } else {
+            $tela = 'enviado';
+          }
+        } elseif ($res['erro'] === 'bloqueado') {
+          $tela = 'enviado'; // não revela que a conta está bloqueada
+        } else {
+          $erro = $res['erro'];
         }
-    } elseif (isset($_GET['token'])) {
-        $link = ver_link((string) $_GET['token']);
-        $tela = $link ? 'confirmar' : 'invalido';
-    } elseif (current_user()) {
-        $tela = 'logado';
+      }
+    } elseif (($_POST['acao'] ?? '') === 'entrar') {
+      $destino = usar_link((string) ($_POST['token'] ?? ''));
+      if ($destino !== null) {
+        header('Location: ' . $destino);
+        exit;
+      }
+      $tela = 'invalido';
     }
+  } elseif (isset($_GET['token'])) {
+    $link = ver_link((string) $_GET['token']);
+    $tela = $link ? 'confirmar' : 'invalido';
+  } elseif (current_user()) {
+    $tela = 'logado';
+  }
 } catch (PDOException $ex) {
-    error_log('[login] ' . $ex->getMessage());
-    $erro = 'O login está indisponível agora. Tente de novo em instantes.';
+  error_log('[login] ' . $ex->getMessage());
+  $erro = 'O login está indisponível agora. Tente de novo em instantes.';
 }
 
 $csrf = csrf_publico();
@@ -100,7 +100,7 @@ require __DIR__ . '/includes/header.php';
 
     <?php else: ?>
       <h1>Entrar</h1>
-      <p>Sem senha: mandamos um link para o seu e-mail. É só clicar e pronto.</p>
+      <p>Será enviado um link de acesso para o seu endereço de e-mail.</p>
       <?php if ($erro): ?><p class="auth-error"><?= e($erro) ?></p><?php endif; ?>
       <form method="post" class="auth-form">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
@@ -115,7 +115,7 @@ require __DIR__ . '/includes/header.php';
         </label>
         <button class="btn btn-gold btn-block">Receber link de acesso</button>
       </form>
-      <p class="auth-small">Ao entrar, você pode votar nas enquetes. Um voto por pessoa.</p>
+      <p class="auth-small">Ao entrar, você poderá votar nas enquetes.</p>
     <?php endif; ?>
 
     <?php if ($erro && $tela !== 'form'): ?><p class="auth-error"><?= e($erro) ?></p><?php endif; ?>

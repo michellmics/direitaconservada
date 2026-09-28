@@ -22,5 +22,9 @@
       <span class="jar-meter"><i id="jar-meter" style="width: <?= max(0.5, count($items) / JAR_CAPACITY * 100) ?>%"></i></span>
       <span><b id="jar-count"><?= num(count($items)) ?></b> de <?= num(JAR_CAPACITY) ?> lugares ocupados</span>
     </p>
+    <p class="jar-legend">
+      <span><i class="ring-dot ring-prata"></i>2º ano no pote</span>
+      <span><i class="ring-dot ring-ouro"></i>3º ano ou mais</span>
+    </p>
   </div>
 </section>

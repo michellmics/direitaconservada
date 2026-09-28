@@ -110,6 +110,24 @@
   </div>
 </div>
 
+<!-- MODAL RENOVAR -->
+<div class="modal" id="renew-modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="renew-title">
+    <button class="modal-x" data-close aria-label="Fechar">×</button>
+    <h2 id="renew-title">Renovar por mais 1 ano</h2>
+    <div class="renew-body" id="renew-body"></div>
+    <div class="pix">
+      <div class="qr" id="renew-qr"></div>
+      <div>
+        <p class="price" id="renew-price"></p>
+        <p class="muted small">Protótipo: nenhuma cobrança é feita.</p>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-block" id="renew-pay" type="button">Simular pagamento aprovado</button>
+  </div>
+</div>
+
 <!-- MODAL VER CERTIFICADO -->
 <div class="modal" id="cert-modal" hidden>
   <div class="modal-backdrop" data-close></div>

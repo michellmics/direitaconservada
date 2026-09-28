@@ -33,6 +33,29 @@ function nome_proprio(?string $s): string
     return implode(' ', $words);
 }
 
+// ---------- tempo de assinatura ----------
+
+// Próximo aniversário da data (depois de hoje): até quando o item vale se renovar todo ano
+function proximo_aniversario(string $desde, ?string $hoje = null): string
+{
+    $hoje = $hoje ?? date('Y-m-d');
+    $d = new DateTimeImmutable($desde);
+    $anos = max(1, (int) $d->diff(new DateTimeImmutable($hoje))->y + 1);
+    $v = $d->modify("+$anos year");
+    return $v->format('Y-m-d') <= $hoje ? $v->modify('+1 year')->format('Y-m-d') : $v->format('Y-m-d');
+}
+
+// Em que ano de assinatura está (1º, 2º, 3º…) e qual anel ganha: '' | 'prata' | 'ouro'
+function ano_de_assinatura(string $desde, ?string $hoje = null): int
+{
+    return (int) (new DateTimeImmutable($desde))->diff(new DateTimeImmutable($hoje ?? date('Y-m-d')))->y + 1;
+}
+
+function anel_de_tempo(int $ano): string
+{
+    return $ano >= 3 ? 'ouro' : ($ano === 2 ? 'prata' : '');
+}
+
 function money(float $v): string
 {
     return 'R$ ' . number_format($v, 2, ',', '.');
