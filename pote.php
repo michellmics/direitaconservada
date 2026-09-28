@@ -12,10 +12,25 @@ $today    = date('Y-m-d');
 $hoje     = count(array_filter($items, fn($o) => $o['desde'] === $today));
 $pageTitle = $S['name'];
 
+// enquete no ar (do banco). Sem banco, o pote funciona normalmente, só sem enquete.
+require_once __DIR__ . '/includes/enquetes.php';
+$extraJs = ['enquete' => null];
+try {
+    $votante = votante_id(); // cookie: precisa vir antes de qualquer HTML
+    if ($e = enquete_ativa($S['slug'])) {
+        $extraJs['enquete'] = enquete_para_js($e, enquete_voto_de((int) $e['id'], $votante));
+    }
+} catch (Throwable $ex) {
+    // banco fora do ar ou migration 002 não rodada
+}
+
 require __DIR__ . '/includes/header.php';
 ?>
 <main>
   <?php require __DIR__ . '/partials/hero.php'; ?>
+  <section class="section poll-section" id="enquete" hidden>
+    <div class="poll" id="poll"></div>
+  </section>
   <?php require __DIR__ . '/partials/mural.php'; ?>
   <?php require __DIR__ . '/partials/ranking.php'; ?>
   <?php require __DIR__ . '/partials/como-funciona.php'; ?>

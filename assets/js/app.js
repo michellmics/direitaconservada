@@ -1029,6 +1029,80 @@
   // ranking: "mais antigos" abre o certificado
   $$('[data-olive-id]').forEach((li) => li.addEventListener('click', () => openCert(byId(Number(li.dataset.oliveId)))));
 
+  // ---------- enquete (uma por vez, criada no painel /admin/) ----------
+  const DUEL_ORDER = ['esquerda', 'direita'];
+
+  function pollResultsHtml(p) {
+    const total = Math.max(1, p.total);
+    const rows = p.opcoes.map((o) => {
+      const pct = Math.round((o.votos / total) * 100);
+      const bar = p.duelo
+        ? DUEL_ORDER.map((s) => `<i style="width:${(((o.porLado?.[s] || 0) / total) * 100).toFixed(1)}%;background:${DC.sides[s].theme.gold}"></i>`).join('')
+        : `<i style="width:${pct}%"></i>`;
+      return `<li class="${p.meuVoto === o.id ? 'mine' : ''}">
+        <div class="poll-row"><span>${p.meuVoto === o.id ? '✓ ' : ''}${esc(o.texto)}</span><b>${pct}%</b></div>
+        <div class="poll-bar">${bar}</div>
+      </li>`;
+    }).join('');
+    const legend = p.duelo
+      ? `<p class="poll-legend">${DUEL_ORDER.map((s) => `<span><i style="background:${DC.sides[s].theme.gold}"></i>${DC.sides[s].emoji} ${esc(DC.sides[s].name)}: <b>${(p.porLado?.[s] || 0).toLocaleString('pt-BR')}</b></span>`).join('')}</p>`
+      : '';
+    return `<ul class="poll-results">${rows}</ul>${legend}`;
+  }
+
+  function renderPoll() {
+    const box = $('#poll');
+    const p = DC.enquete;
+    if (!box) return;
+    $('#enquete').hidden = !p;
+    if (!p) return;
+
+    const voted = p.meuVoto !== null;
+    let body;
+    if (p.mostra) {
+      body = pollResultsHtml(p);
+    } else if (voted) {
+      body = '<p class="poll-note">✓ Voto registrado! O resultado aparece quando a enquete encerrar.</p>';
+    } else {
+      body = `<div class="poll-options">${p.opcoes.map((o) => `<button type="button" class="poll-option" data-vote="${o.id}">${esc(o.texto)}</button>`).join('')}</div>`;
+    }
+    // resultado visível antes de votar ("sempre"): mostra as barras e também os botões
+    if (p.mostra && !voted) {
+      body = `<div class="poll-options">${p.opcoes.map((o) => `<button type="button" class="poll-option" data-vote="${o.id}">${esc(o.texto)}</button>`).join('')}</div>` + body;
+    }
+
+    const fim = p.termina ? ` · encerra em ${fmtDate(p.termina.slice(0, 10))} às ${p.termina.slice(11, 16)}` : '';
+    box.innerHTML = `
+      <div class="poll-head">
+        <span class="tag">${p.duelo ? `Duelo entre os potes ${DC.sides.esquerda.emoji} × ${DC.sides.direita.emoji}` : 'Enquete'}</span>
+        <h2>${esc(p.pergunta)}</h2>
+        ${p.descricao ? `<p class="poll-desc">${esc(p.descricao)}</p>` : ''}
+        ${p.duelo && !voted ? `<p class="poll-desc">Seu voto conta para o time ${S.emoji} ${esc(S.name)}.</p>` : ''}
+      </div>
+      ${body}
+      <p class="poll-foot">${p.total !== null ? `${p.total.toLocaleString('pt-BR')} ${p.total === 1 ? 'voto' : 'votos'}` : 'Resultado oculto até o fim'}${fim}</p>`;
+  }
+
+  $('#poll')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-vote]');
+    if (!btn || DC.enquete.meuVoto !== null) return;
+    $$('[data-vote]').forEach((b) => { b.disabled = true; });
+    try {
+      const res = await fetch('api/enquete.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enquete: DC.enquete.id, opcao: Number(btn.dataset.vote), lado: SIDE }),
+      });
+      const data = await res.json();
+      if (data.erro) toast(data.erro);
+      DC.enquete = data.enquete || (data.erro ? DC.enquete : data);
+      if (!data.erro) toast('Voto registrado!');
+    } catch {
+      toast('Não foi possível votar agora. Tente de novo.');
+    }
+    renderPoll();
+  });
+
   // ---------- perfil (perfil.php) ----------
   const addYear = (iso) => { const [y, m, d] = iso.split('-'); return `${Number(y) + 1}-${m}-${d}`; };
 
@@ -1196,6 +1270,7 @@
   renderFeed();
   updateComposer();
   updateMyProfileLink();
+  renderPoll();
   if (DC.profileId !== undefined) renderProfile();
 
   // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado

@@ -53,3 +53,12 @@ assets/js/app.js        pote interativo, compra, certificado, compartilhar, mura
 ```
 
 Link direto para um item: `pote.php?lado=direita#azeitona-42` ou `pote.php?lado=esquerda#pimenta-42`.
+
+## Painel do administrador (`/admin/`)
+
+1. Defina `ADMIN_PASSWORD` no `.env` (vazio = painel desativado).
+2. Acesse http://localhost:8080/admin/ e entre com essa senha.
+
+No painel você cria **enquetes** — só uma fica no ar por vez (publicar uma nova encerra a atual).
+Cada enquete pode aparecer nos dois potes (**duelo**, com resultado separado por lado) ou em um só.
+Os votos vão para o banco (`enquete_votos`), um por navegador, até existir login.
