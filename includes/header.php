@@ -28,8 +28,6 @@ $O = side($S['other']);
     <?php $home = basename($_SERVER['SCRIPT_NAME']) === 'pote.php' ? '' : 'pote.php?lado=' . $S['slug']; ?>
     <nav>
       <a href="<?= $home ?>#pote">O Pote</a>
-      <a href="<?= $home ?>#mural">Mural</a>
-      <a href="<?= $home ?>#ranking">Ranking</a>
       <a href="<?= $home ?>#como">Como funciona</a>
     </nav>
     <a class="my-profile" id="my-profile" hidden title="Meu perfil"></a>
