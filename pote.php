@@ -14,11 +14,12 @@ $pageTitle = $S['name'];
 
 // enquete no ar (do banco). Sem banco, o pote funciona normalmente, só sem enquete.
 require_once __DIR__ . '/includes/enquetes.php';
+require_once __DIR__ . '/includes/auth.php';
 $extraJs = ['enquete' => null];
 try {
-    $votante = votante_id(); // cookie: precisa vir antes de qualquer HTML
+    $usuario = current_user(); // pode renovar o cookie: antes de qualquer HTML
     if ($e = enquete_ativa($S['slug'])) {
-        $extraJs['enquete'] = enquete_para_js($e, enquete_voto_de((int) $e['id'], $votante));
+        $extraJs['enquete'] = enquete_para_js($e, enquete_voto_de((int) $e['id'], $usuario ? (int) $usuario['id'] : null));
     }
 } catch (Throwable $ex) {
     // banco fora do ar ou migration 002 não rodada

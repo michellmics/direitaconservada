@@ -60,35 +60,27 @@ function enquete_completar(array $e): array
     return $e;
 }
 
-// Identificador anônimo do navegador (cookie). Chame antes de enviar qualquer HTML.
-function votante_id(): string
+// Só quem está logado vota: um voto por pessoa (vale em qualquer aparelho)
+function votante_de(int $usuarioId): string
 {
-    $id = $_COOKIE['dc_votante'] ?? '';
-    if (!preg_match('/^[a-f0-9]{32}$/', $id)) {
-        $id = bin2hex(random_bytes(16));
-        setcookie('dc_votante', $id, [
-            'expires'  => time() + 60 * 60 * 24 * 365 * 2,
-            'path'     => '/',
-            'httponly' => true,
-            'samesite' => 'Lax',
-            'secure'   => !empty($_SERVER['HTTPS']),
-        ]);
-        $_COOKIE['dc_votante'] = $id;
-    }
-    return hash('sha256', 'dc|' . $id);
+    return hash('sha256', 'u|' . $usuarioId);
 }
 
-function enquete_voto_de(int $enqueteId, string $votante): ?int
+function enquete_voto_de(int $enqueteId, ?int $usuarioId): ?int
 {
+    if ($usuarioId === null) {
+        return null;
+    }
     $st = db()->prepare('SELECT opcao_id FROM enquete_votos WHERE enquete_id = ? AND votante = ?');
-    $st->execute([$enqueteId, $votante]);
+    $st->execute([$enqueteId, votante_de($usuarioId)]);
     $v = $st->fetchColumn();
     return $v === false ? null : (int) $v;
 }
 
 /** Registra o voto. Retorna null se deu certo ou a mensagem de erro. */
-function enquete_votar(int $enqueteId, int $opcaoId, string $lado, string $votante): ?string
+function enquete_votar(int $enqueteId, int $opcaoId, string $lado, int $usuarioId): ?string
 {
+    $votante = votante_de($usuarioId);
     $e = enquete_ativa();
     if (!$e || (int) $e['id'] !== $enqueteId) {
         return 'Esta enquete não está mais aberta.';
@@ -100,8 +92,8 @@ function enquete_votar(int $enqueteId, int $opcaoId, string $lado, string $votan
         return 'Opção inválida.';
     }
     try {
-        db()->prepare('INSERT INTO enquete_votos (enquete_id, opcao_id, lado, votante) VALUES (?, ?, ?, ?)')
-            ->execute([$enqueteId, $opcaoId, $lado, $votante]);
+        db()->prepare('INSERT INTO enquete_votos (enquete_id, opcao_id, lado, usuario_id, votante) VALUES (?, ?, ?, ?, ?)')
+            ->execute([$enqueteId, $opcaoId, $lado, $usuarioId, $votante]);
     } catch (PDOException $ex) {
         if ($ex->errorInfo[1] === 1062) { // chave duplicada
             return 'Você já votou nesta enquete.';

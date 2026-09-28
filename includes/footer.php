@@ -4,6 +4,7 @@
 
   <div class="toast" id="toast" hidden></div>
 
+  <?php if ($comCompra): // só as páginas de pote e perfil usam o app.js ?>
   <?php
   // o que o JS precisa saber sobre os dois lados (textos, tipos, desenhos)
   $sidesForJs = [];
@@ -21,8 +22,11 @@
         'items'    => $items,
         'comments' => $comments,
         'capacity' => JAR_CAPACITY,
+        'logado'   => $U !== null,
+        'loginUrl' => 'entrar.php?lado=' . $S['slug'] . '&r=' . urlencode(destino_seguro($paginaAtual) . '#enquete'),
     ] + ($extraJs ?? []), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   </script>
   <script src="assets/js/app.js"></script>
+  <?php endif; ?>
 </body>
 </html>

@@ -62,3 +62,16 @@ Link direto para um item: `pote.php?lado=direita#azeitona-42` ou `pote.php?lado=
 No painel você cria **enquetes** — só uma fica no ar por vez (publicar uma nova encerra a atual).
 Cada enquete pode aparecer nos dois potes (**duelo**, com resultado separado por lado) ou em um só.
 Os votos vão para o banco (`enquete_votos`), um por navegador, até existir login.
+
+## Login (link mágico por e-mail)
+
+- `composer install` (instala o PHPMailer em `vendor/`, que não vai para o git).
+- Configure no `.env`: `APP_URL` (endereço público do site — vai no link do e-mail) e `ENV_SMTP_HOST/PORT/USER/PASS`.
+- `entrar.php`: a pessoa digita o e-mail e recebe um link (vale 20 min, uso único). Abrir o link mostra o botão
+  "Entrar" — assim os filtros de e-mail que abrem links sozinhos não gastam o acesso.
+- Sessão de 30 dias (tabela `sessoes`), renovada enquanto a pessoa usa o site. Sair: `sair.php` (POST).
+- **Enquetes: só vota quem está logado**, um voto por pessoa (em qualquer aparelho).
+- Limite: 3 links por e-mail a cada 15 minutos.
+
+> Antivírus com "proteção de e-mail" (ex.: Norton Mail Shield) interceptam o SMTP com certificado próprio e o PHP
+> recusa a conexão. Em produção isso não acontece; localmente, desative a verificação de e-mail do antivírus para o PHP.

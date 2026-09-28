@@ -1,6 +1,10 @@
 <?php
 /** Espera $S (lado atual) e $pageTitle. */
+require_once __DIR__ . '/auth.php';
 $O = side($S['other']);
+$U = current_user();
+$paginaAtual = basename($_SERVER['SCRIPT_NAME']) . (!empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : '');
+$comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.php'], true); // páginas com o modal de compra
 ?>
 <!doctype html>
 <html lang="pt-BR" style="<?= theme_vars($S) ?>">
@@ -34,5 +38,27 @@ $O = side($S['other']);
     <a class="side-switch" href="pote.php?lado=<?= $O['slug'] ?>" style="<?= theme_vars($O) ?>" title="Ir para <?= e($O['name']) ?>">
       <?= item_svg($O, array_key_first($O['types']), 'side-switch-icon') ?><span>Espiar o outro pote</span>
     </a>
-    <button class="btn btn-gold btn-sm" data-open-buy>Quero minha <?= e($S['item']) ?></button>
+    <?php if ($U): ?>
+      <details class="user-menu">
+        <summary title="<?= e($U['email']) ?>">
+          <span class="user-initial avatar-<?= $S['slug'] ?>-<?= e(array_key_first($S['types'])) ?>"><?= e(mb_strtoupper(mb_substr(nome_proprio($U['nome']), 0, 1))) ?></span>
+          <span class="user-name"><?= e(explode(' ', nome_proprio($U['nome']))[0]) ?></span>
+        </summary>
+        <div class="user-menu-box">
+          <p><b><?= e(nome_proprio($U['nome'])) ?></b><small><?= e($U['email']) ?></small></p>
+          <form method="post" action="sair.php">
+            <input type="hidden" name="csrf" value="<?= e(csrf_publico()) ?>">
+            <input type="hidden" name="r" value="<?= e(destino_seguro($paginaAtual)) ?>">
+            <button class="btn btn-ghost btn-sm btn-block">Sair</button>
+          </form>
+        </div>
+      </details>
+    <?php elseif (basename($_SERVER['SCRIPT_NAME']) !== 'entrar.php'): ?>
+      <a class="login-link" href="entrar.php?lado=<?= $S['slug'] ?>&r=<?= urlencode(destino_seguro($paginaAtual)) ?>">Entrar</a>
+    <?php endif; ?>
+    <?php if ($comCompra): ?>
+      <button class="btn btn-gold btn-sm" data-open-buy>Quero minha <?= e($S['item']) ?></button>
+    <?php else: ?>
+      <a class="btn btn-gold btn-sm" href="pote.php?lado=<?= $S['slug'] ?>">Quero minha <?= e($S['item']) ?></a>
+    <?php endif; ?>
   </header>

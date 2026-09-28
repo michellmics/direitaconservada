@@ -30,14 +30,20 @@ if (!$enqueteId || !$opcaoId || !isset(SIDES[$lado])) {
     responder(['erro' => 'Dados inválidos.'], 422);
 }
 
+require dirname(__DIR__) . '/includes/auth.php';
+$usuario = current_user();
+if (!$usuario) {
+    responder(['erro' => 'Entre para votar.', 'login' => true], 401);
+}
+
 try {
-    $votante = votante_id();
-    $erro = enquete_votar($enqueteId, $opcaoId, $lado, $votante);
+    $uid = (int) $usuario['id'];
+    $erro = enquete_votar($enqueteId, $opcaoId, $lado, $uid);
     $e = enquete_buscar($enqueteId);
     if (!$e) {
         responder(['erro' => 'Enquete não encontrada.'], 404);
     }
-    $dados = enquete_para_js($e, enquete_voto_de($enqueteId, $votante));
+    $dados = enquete_para_js($e, enquete_voto_de($enqueteId, $uid));
     responder($erro ? ['erro' => $erro, 'enquete' => $dados] : $dados, $erro ? 409 : 200);
 } catch (PDOException $ex) {
     responder(['erro' => 'Não foi possível registrar o voto agora.'], 503);

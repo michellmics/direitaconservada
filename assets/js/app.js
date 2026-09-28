@@ -1080,12 +1080,14 @@
         ${p.duelo && !voted ? `<p class="poll-desc">Seu voto conta para o time ${S.emoji} ${esc(S.name)}.</p>` : ''}
       </div>
       ${body}
+      ${!DC.logado && !voted ? `<p class="poll-login">🔒 Só quem está logado vota — um voto por pessoa. <a href="${esc(DC.loginUrl)}">Entrar para votar</a> (sem senha, pelo e-mail).</p>` : ''}
       <p class="poll-foot">${p.total !== null ? `${p.total.toLocaleString('pt-BR')} ${p.total === 1 ? 'voto' : 'votos'}` : 'Resultado oculto até o fim'}${fim}</p>`;
   }
 
   $('#poll')?.addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-vote]');
     if (!btn || DC.enquete.meuVoto !== null) return;
+    if (!DC.logado) { location.href = DC.loginUrl; return; } // volta para a enquete depois de entrar
     $$('[data-vote]').forEach((b) => { b.disabled = true; });
     try {
       const res = await fetch('api/enquete.php', {
@@ -1094,6 +1096,7 @@
         body: JSON.stringify({ enquete: DC.enquete.id, opcao: Number(btn.dataset.vote), lado: SIDE }),
       });
       const data = await res.json();
+      if (data.login) { location.href = DC.loginUrl; return; } // sessão expirou
       if (data.erro) toast(data.erro);
       DC.enquete = data.enquete || (data.erro ? DC.enquete : data);
       if (!data.erro) toast('Voto registrado!');
