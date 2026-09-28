@@ -1,0 +1,12 @@
+{
+    "name": "codemaze/direitaconservada",
+    "description": "Direita Conservada × Pimenta da Resistência",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

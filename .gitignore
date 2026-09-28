@@ -1,1 +1,7 @@
 *.tmp
+
+# credenciais
+.env
+
+# dependências (composer install)
+/vendor/
