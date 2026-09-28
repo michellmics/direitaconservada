@@ -150,7 +150,7 @@
     const pos = document.createElementNS(SVG, 'g');
     pos.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scaleOf(o) * L.itemScale})`);
     const g = document.createElementNS(SVG, 'g');
-    g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : '') + (anelDe(o) ? ' tempo-' + anelDe(o) : ''));
+    g.setAttribute('class', 'olive' + (animate ? ' drop' : '') + (mine.some((m) => m.id === o.id) ? ' is-mine' : ''));
     g.dataset.id = o.id;
     g.innerHTML = oliveInner(o);
     pos.appendChild(g);
@@ -158,11 +158,7 @@
   }
 
   function oliveInner(o) {
-    const anel = anelDe(o);
-    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}` +
-      // anel de tempo: 2º ano prata, 3º+ ouro
-      (anel ? `<ellipse class="tempo-ring" rx="${S.ring[0]}" ry="${S.ring[1]}" cx="${SIDE === 'esquerda' ? 1 : 0}" fill="none" stroke="url(#ring-${anel})" stroke-width="${anel === 'ouro' ? 2.6 : 2.1}"/>` : '') +
-      '</g>' +
+    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
       (o.selo ? seloSvg(o.selo) : '') +
       // selo de play (fora da rotação, para o triângulo ficar sempre de pé)
       (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '');
@@ -746,6 +742,7 @@
     renderFeed();
     updateComposer();
     updateMyProfileLink();
+    renderNewest();
 
     const showCert = (o) => {
       $('#cert-slot').innerHTML = certHtml(o);
@@ -1114,8 +1111,26 @@
     toast('Publicado no mural!');
   });
 
-  // ranking: "mais antigos" abre o certificado
-  $$('[data-olive-id]').forEach((li) => li.addEventListener('click', () => openCert(byId(Number(li.dataset.oliveId)))));
+  // ranking: recém-chegados ao pote (inclui quem acabou de comprar neste navegador)
+  function quandoEntrou(iso) {
+    const d = -diasAte(iso);
+    return d <= 0 ? 'entrou hoje' : d === 1 ? 'entrou ontem' : `entrou há ${d} dias`;
+  }
+
+  function renderNewest() {
+    const box = $('#newest');
+    if (!box) return;
+    const recentes = [...noPote()]
+      .sort((a, b) => b.desde.localeCompare(a.desde) || b.id - a.id)
+      .slice(0, 5);
+    box.innerHTML = recentes.map((o) => `<li>
+      <a href="${profileUrl(SIDE, o.id)}">
+        <span class="num">${numero(o.id)}</span>
+        ${avatarWithSelo(o, 'post-avatar')}
+        <span><b>${esc(o.nome)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · <span class="when">${quandoEntrou(o.desde)}</span></small></span>
+      </a>
+    </li>`).join('');
+  }
 
   // ---------- enquete (uma por vez, criada no painel /admin/) ----------
   const DUEL_ORDER = ['esquerda', 'direita'];
@@ -1381,6 +1396,7 @@
     if ($('#jar')) renderJar();
     updateStats();
     renderFeed();
+    renderNewest();
     if (DC.profileId !== undefined) renderProfile();
   });
 
@@ -1416,6 +1432,7 @@
   updateMyProfileLink();
   renderPoll();
   renderProvocadores();
+  renderNewest();
   if (DC.profileId !== undefined) renderProfile();
 
   // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado

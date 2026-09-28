@@ -17,6 +17,9 @@ php -S localhost:8080
 
 Abra http://localhost:8080
 
+> O servidor embutido do PHP atende **um pedido por vez**; no Windows, às vezes o navegador fica esperando um arquivo
+> (o pote aparece vazio). É só recarregar. Em produção (Apache/Nginx) isso não acontece. As páginas saem comprimidas (gzip).
+
 ## Banco de dados (MySQL 8.0.16+)
 
 1. Copie `.env.example` para `.env` (se ainda não existir) e preencha `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` e `DB_PASSWORD`.
@@ -78,7 +81,7 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 
 ## Assinatura anual, anéis de tempo e provocadores
 
-- **Anel de tempo**: 1º ano normal, 2º ano anel de **prata**, 3º ano ou mais anel de **ouro** (no pote, no balão, na foto, no certificado e no perfil).
+- **Tempo de assinatura**: 1º ano normal, 2º ano **prata**, 3º ano ou mais **ouro** — aparece no balão do pote, na foto do mural, no certificado e no perfil (no pote em si, sem contorno).
   Conta pelo `desde` do item (`ano_de_assinatura()` / `anel_de_tempo()` em `includes/config.php`).
 - **"Desde" preservado**: `renovar_item()` (`includes/itens.php`) — renovando **em dia**, soma 1 ano à validade e mantém o `desde`;
   **vencido**, recomeça (`desde` = hoje). `expirar_itens()` tira do pote quem passou da validade (rodar 1x por dia).
