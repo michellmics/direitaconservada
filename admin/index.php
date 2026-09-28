@@ -165,8 +165,9 @@ while (count($opcoesForm) < 2) {
   <header class="topbar adm-topbar">
     <a class="brand" href="./"><span>🗳️ Painel <b>Enquetes</b></span></a>
     <nav>
-      <a href="../pote.php?lado=esquerda" target="_blank">🌶️ Ver Pimenta</a>
-      <a href="../pote.php?lado=direita" target="_blank">🫒 Ver Direita</a>
+      <?php if ($logado): ?><a href="frases">💬 Frases</a><?php endif; ?>
+      <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
+      <a href="../<?= e(url('pote', ['lado' => 'direita'])) ?>" target="_blank">🫒 Ver Direita</a>
     </nav>
     <?php if ($logado): ?>
       <form method="post" class="adm-inline">

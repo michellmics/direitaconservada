@@ -3,7 +3,7 @@
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/includes/auth.php';
 
-$volta = destino_seguro($_POST['r'] ?? 'index.php');
+$volta = destino_seguro($_POST['r'] ?? './');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && csrf_publico_ok($_POST['csrf'] ?? null)) {
     encerrar_sessao();
 }

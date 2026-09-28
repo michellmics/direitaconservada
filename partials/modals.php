@@ -8,6 +8,7 @@
     <!-- passo 1: dados -->
     <form class="step-pane" data-step="1" id="buy-form">
       <h2 id="buy-title">Sua <?= e($S['item']) ?></h2>
+      <?php if ($fraseCompra = frase('compra', $S['slug'])): ?><p class="piada compra-piada"><?= e($fraseCompra) ?></p><?php endif; ?>
 
       <!-- carrinho: aparece quando há itens adicionados -->
       <div class="cart" id="cart" hidden>
@@ -60,7 +61,7 @@
             <span class="selo-opt" id="selo-upload-preview">+</span>
           </label>
         </div>
-        <small class="selo-hint">Escolha um símbolo ou toque em <b>+</b> para enviar a bandeira do seu partido.</small>
+        <small class="selo-hint">Ou toque em <b>+</b> e envie a sua bandeira.</small>
       </div>
       <div class="row two">
         <label class="field"><span>Cidade</span><input name="cidade" required maxlength="30" placeholder="<?= $S['slug'] === 'esquerda' ? 'Ex.: Recife' : 'Ex.: Chapecó' ?>"></label>
@@ -77,6 +78,7 @@
           <button type="button" class="chip" data-phrase="<?= e($f) ?>"><?= e($f) ?></button>
         <?php endforeach; ?>
       </div>
+      <p class="nivel-nudge" id="nivel-nudge" aria-live="polite"></p>
       <div class="buy-actions">
         <button class="btn btn-ghost btn-block" type="button" id="add-more">+ Adicionar outra <?= e($S['item']) ?> <small>(outro tipo ou outra pessoa)</small></button>
         <button class="btn btn-gold btn-block" type="submit">Continuar · <span data-price-total><?= money($S['types'][$firstType]['price']) ?></span>/ano</button>
@@ -102,6 +104,7 @@
     <!-- passo 3: certificado -->
     <div class="step-pane" data-step="3" hidden>
       <h2><?= e($S['success']) ?></h2>
+      <p class="nivel-up" id="nivel-up" hidden></p>
       <p class="muted" id="bought-summary" hidden></p>
       <ul class="bought-list" id="bought-list" hidden></ul>
       <div class="cert-slot" id="cert-slot"></div>

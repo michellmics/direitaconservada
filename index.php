@@ -33,14 +33,16 @@ $total = array_sum($count);
     <header class="choose-head">
       <span class="tag">Dois potes, um debate</span>
       <h1>Escolha seu pote</h1>
-      <p>Cada lado tem seu pote, seu mural e seu certificado. E quem está num pote pode comentar no outro.</p>
+      <p>Petralha zoa a azeitona, tio do pavê xinga a pimenta. E o grupo da família não sobrevive.</p>
+      <?php require_once __DIR__ . '/includes/frases.php';
+      if ($fraseEntrada = frase('entrada', null)): ?><p class="piada entrada-piada">“<?= e($fraseEntrada) ?>”</p><?php endif; ?>
     </header>
 
     <div class="choose-sides">
       <?php foreach ($order as $slug):
           $S = side($slug);
           $jarItems = array_slice(mock_items($slug), 0, 110); ?>
-        <a class="side-card side-<?= $slug ?>" href="pote.php?lado=<?= $slug ?>" style="<?= theme_vars($S) ?>">
+        <a class="side-card side-<?= $slug ?>" href="<?= e(url('pote', ['lado' => $slug])) ?>" style="<?= theme_vars($S) ?>">
           <div class="side-jar"><?php require __DIR__ . '/partials/jar.php'; ?></div>
           <div class="side-info">
             <span class="tag"><?= e($S['tag']) ?></span>

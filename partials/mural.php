@@ -4,6 +4,7 @@
       <span class="tag"><?= e($S['mural_tag']) ?></span>
       <h2>Direto do pote</h2>
       <p class="section-sub">Os dois lados podem comentar: quem tem <?= e(side($S['other'])['item']) ?> <?= side($S['other'])['emoji'] ?> também comenta aqui.</p>
+      <?php if ($fraseMural = frase('mural', $S['slug'])): ?><p class="piada">💬 <?= e($fraseMural) ?></p><?php endif; ?>
     </div>
     <div class="tabs" role="tablist">
       <button class="tab active" data-sort="recentes">Recentes</button>

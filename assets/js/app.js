@@ -24,6 +24,13 @@
   const myPosts = store.get(`${SIDE}_posts`, []);  // posts do mural publicados neste navegador
   const liked = new Set(store.get('likes', []));
   const myComments = store.get('comments', []);  // comentários feitos neste navegador (qualquer pote)
+  // id de cada comentário deste navegador (para citar e apagar); os antigos ganham um agora
+  if (myComments.some((c) => !c.id)) {
+    myComments.forEach((c, i) => { c.id ??= `l${Date.now()}-${i}`; });
+    store.set('comments', myComments);
+  }
+  // apagado continua na lista (aparece "comentário apagado"), mas não conta para nada
+  const comentariosAtivos = () => myComments.filter((c) => !c.apagado);
 
   // Nome próprio: "JOÃO DA SILVA" / "joão da silva" → "João da Silva" (igual a nome_proprio() no PHP)
   const PARTICULAS = new Set(['da', 'de', 'do', 'das', 'dos', 'e', 'di', 'du']);
@@ -36,8 +43,9 @@
   }
 
   const olives = [...DC.items, ...mine];
-  olives.forEach((o) => { o.nome = nomeProprio(o.nome); });
-  [...DC.comments, ...myComments].forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
+  // nome e cidade sempre com só as iniciais maiúsculas: "SÃO PAULO" / "são paulo" → "São Paulo"
+  olives.forEach((o) => { o.nome = nomeProprio(o.nome); o.cidade = nomeProprio(o.cidade); });
+  myComments.forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
   const byId = (id) => olives.find((o) => o.id === id);
 
   // Quem está comentando: o item comprado mais recente, em qualquer um dos potes
@@ -56,7 +64,12 @@
   const numero = (id) => '#' + String(id).padStart(4, '0');
   const initials = (n) => n.split(/\s+/).map((p) => p[0]).join('').slice(0, 2).toUpperCase();
   const rand = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
-  const profileUrl = (side, id) => `perfil.php?lado=${side}&id=${id}`;
+  // Links de perfil já cifrados pelo servidor (DC.links; a chave não vem para o navegador).
+  // Os das compras feitas neste navegador vêm de /api/link e ficam guardados (garantirLinksLocais).
+  const linksLocais = store.get('links', {});
+  const linkPerfilExato = (side, id) => DC.links?.perfil?.[side]?.[id] || linksLocais[`${side}:${id}`] || null;
+  const profileUrl = (side, id) => linkPerfilExato(side, id) || DC.links?.pote?.[side] || './'; // sem link: vai para o pote
+  const poteUrl = (side) => DC.links?.pote?.[side] || './';
   // link que vai para o compartilhamento: o perfil da pessoa
   const oliveUrl = (o) => new URL(profileUrl(o.side || SIDE, o.id), location.href).href;
   const typeLabel = (tipo, side = SIDE) => DC.sides[side].types[tipo]?.label || tipo;
@@ -118,12 +131,12 @@
     img.outerHTML = `<div class="${img.dataset.fallbackClass}">${img.dataset.initials}</div>`;
   }, true);
 
-  function toast(msg) {
+  function toast(msg, ms = 2600) {
     const t = $('#toast');
     t.textContent = msg;
     t.hidden = false;
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => { t.hidden = true; }, 2600);
+    toast.timer = setTimeout(() => { t.hidden = true; }, ms);
   }
 
   // ---------- pote ----------
@@ -225,7 +238,7 @@
       el.classList.add('is-active');
       const v = videoOf(o);
       tip.innerHTML =
-        `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)} · ${tempoTexto(o)}</small>${provocadorTag(o.id)}</div></div>` +
+        `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}${nivelTag(SIDE, o.id)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)} · ${tempoTexto(o)}</small>${provocadorTag(o.id)}</div></div>` +
         `<q>${esc(o.frase)}</q>` +
         (DC.profileId === o.id ? '' : `<a class="tip-profile" href="${profileUrl(SIDE, o.id)}">Ver perfil →</a>`) +
         (v ? `<div class="tip-video">${videoCoverHtml(v)}</div>` : '');
@@ -539,6 +552,7 @@
     if (!e.target.closest('[data-open-buy]')) return;
     goStep(1);
     openModal('#buy-modal');
+    updateTotal(); // mostra o aviso de nível já na abertura
     buyForm.elements.nome.focus();
   });
   // ---------- carrinho: várias azeitonas/pimentas na mesma compra ----------
@@ -557,7 +571,7 @@
     return {
       tipo: f.get('tipo'),
       nome: nomeProprio(f.get('nome')),
-      cidade: f.get('cidade').trim(),
+      cidade: nomeProprio(f.get('cidade')),
       uf: f.get('uf'),
       frase: f.get('frase').trim(),
       foto: photoData,
@@ -583,7 +597,9 @@
   }
 
   function updateTotal() {
-    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(totalNow()); });
+    const total = totalNow();
+    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(total); });
+    $('#nivel-nudge').innerHTML = nivelNudge(total);
   }
 
   // limpa só o que é do item (mantém cidade, UF e tipo para agilizar o próximo)
@@ -606,6 +622,7 @@
   buyForm.addEventListener('input', updateTotal);
   // corrige o nome ao sair do campo
   buyForm.elements.nome.addEventListener('blur', (e) => { e.target.value = nomeProprio(e.target.value); });
+  buyForm.elements.cidade.addEventListener('blur', (e) => { e.target.value = nomeProprio(e.target.value); });
   buyForm.addEventListener('change', updateTotal);
 
   buyModal.addEventListener('click', (e) => {
@@ -723,6 +740,7 @@
   $('#copy-pix').addEventListener('click', () => toast('Código Pix copiado (de mentirinha)'));
 
   $('#simulate-pay').addEventListener('click', () => {
+    const nivelAntes = meuNivel(SIDE);
     let nextId = Math.max(...olives.map((x) => x.id)) + 1;
     const bought = [];
     pending.forEach((en) => {
@@ -738,11 +756,21 @@
       setTimeout(() => dropOlive(o), k * 160); // caem uma após a outra
     });
     store.set(`${SIDE}_mine`, mine);
+    limparTempero();
+    const nivelNovo = meuNivel(SIDE);
+    const nv = nivelNovo > nivelAntes ? nivelInfo(SIDE, nivelNovo) : null;
+    $('#nivel-up').hidden = !nv;
+    if (nv) {
+      avisarPorEmail(SIDE);
+      $('#nivel-up').innerHTML = `<span class="nivel-up-icone">${nv.icone}</span><span>${nivelAntes ? 'Você subiu para o' : 'Você entrou no'} nível <b>${esc(nv.nome)}</b>!<small>Seu nome agora aparece assim no pote, no mural e nos comentários.</small></span>`;
+    }
     updateStats();
     renderFeed();
     updateComposer();
     updateMyProfileLink();
     renderNewest();
+    renderMapa(); // a compra conta no estado da pessoa
+    garantirLinksLocais(); // link cifrado do perfil das novas
 
     const showCert = (o) => {
       $('#cert-slot').innerHTML = certHtml(o);
@@ -783,6 +811,8 @@
 
   // ---------- vídeos (YouTube / TikTok) ----------
   const TEXT_MAX = 180;
+  const COMENTARIO_MAX = 200; // letras do comentário (o link do vídeo não conta)
+  const DICA_COMENTARIO = 'Cole um link do YouTube/TikTok para responder com vídeo.';
   const VIDEO_RE = [
     { provider: 'youtube', vertical: true, re: /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/shorts\/([\w-]{11})\S*/i },
     { provider: 'youtube', vertical: false, re: /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/(?:watch\?\S*?v=|live\/|embed\/)([\w-]{11})\S*/i },
@@ -843,44 +873,91 @@
   const videoBoxHtml = (cls, v) => `<div class="${cls}" data-video="${esc(JSON.stringify(v))}">${videoCoverHtml(v)}</div>`;
 
   // ---------- mural ----------
-  const PAGE = 12;
+  // Os posts vêm do servidor, 12 por vez: a 1ª página já vem na página (DC.feed) e "Carregar mais" busca
+  // as próximas em /api/posts, na ordem da aba. Os publicados neste navegador aparecem no topo.
   let sort = 'recentes';
-  let shown = PAGE;
+  const feed = { posts: DC.feed?.posts || [], mais: !!DC.feed?.mais, carregando: false, erro: false, pedido: 0 };
 
+  // posts deste navegador (ainda não estão no servidor): publicados aqui + a frase de quem comprou aqui
+  function postsLocais() {
+    const frases = mine.filter((o) => !vencido(o) && !o.semPost)
+      .map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes || 0, video: o.video || null, isNew: true }));
+    let list = [...myPosts.map((p) => ({ ...p, isNew: true })), ...frases];
+    if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
+    return list.sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
+  }
+  const postsNaTela = () => [...postsLocais(), ...feed.posts];
+
+  // busca a próxima página (ou, com reset, a 1ª de novo — ao trocar de aba); respostas atrasadas são ignoradas
+  async function carregarPosts(reset = false) {
+    if (feed.carregando && !reset) return;
+    const pedido = ++feed.pedido;
+    Object.assign(feed, { carregando: true, erro: false }, reset ? { posts: [], mais: false } : {});
+    renderFeed();
+    try {
+      const res = await fetch('api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lado: SIDE, ordem: sort, offset: feed.posts.length, perfil: DC.profileId || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.erro);
+      if (pedido !== feed.pedido) return;
+      feed.posts = [...feed.posts, ...data.posts.filter((p) => !feed.posts.some((q) => q.id === p.id))];
+      feed.mais = data.mais;
+    } catch {
+      if (pedido !== feed.pedido) return;
+      feed.erro = true;
+    }
+    feed.carregando = false;
+    renderFeed();
+  }
+
+  // todos os posts da pessoa no perfil (estatísticas): itens do pote + publicados aqui
   function allPosts() {
     const fromOlives = noPote().filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
     let list = [...extra, ...fromOlives];
     if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
     if (sort === 'top') return list.sort((a, b) => likesOf(b) - likesOf(a));
-    if (sort === 'debate') return list.sort((a, b) => commentsOf(b.id).length - commentsOf(a.id).length);
+    if (sort === 'debate') return list.sort((a, b) => totalComentarios(b.id) - totalComentarios(a.id));
     return list.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
   }
   const likesOf = (p) => p.likes + (liked.has(p.id) ? 1 : 0);
 
   // ---------- comentários (os dois lados podem comentar) ----------
+  // Os do servidor vêm de /api/comentarios, 10 por vez (os mais recentes; "ver anteriores" busca mais).
+  // A página traz só as contagens (DC.comentarios.contagem); os feitos neste navegador somam por cima.
   const openComments = new Set();
-  const commentsOf = (postId) => [...DC.comments, ...myComments].filter((c) => c.post === postId);
+  const CONTAGEM = DC.comentarios?.contagem || {};
+  const locaisDoPost = (postId) => myComments.filter((c) => c.post === postId); // inclui os apagados (viram aviso)
+  const totalComentarios = (postId) => (CONTAGEM[postId]?.total || 0) + locaisDoPost(postId).filter((c) => !c.apagado).length;
+  const visitantesDoPost = (postId) => (CONTAGEM[postId]?.visitantes || 0)
+    + locaisDoPost(postId).filter((c) => !c.apagado && c.autor.side !== SIDE).length;
   // ---------- Provocador(a) do mês: quem mais recebeu comentários do OUTRO pote neste mês ----------
   // (mesma regra de provocadores_do_mes() no PHP)
   const mesNome = () => new Date().toLocaleDateString('pt-BR', { month: 'long' });
+  // item dono do post: "lado-o42" é a frase do item 42; "lado-p…" é uma publicação (deste navegador ou do banco)
   function donoDoPost(postId) {
     const m = postId.match(new RegExp(`^${SIDE}-o(\\d+)$`));
     if (m) return Number(m[1]);
-    return myPosts.find((p) => p.id === postId)?.oliveId ?? null;
+    return myPosts.find((p) => p.id === postId)?.oliveId ?? feed.posts.find((p) => p.id === postId)?.oliveId ?? null;
   }
   let provocadoresCache = null;
   function provocadores() {
     if (provocadoresCache) return provocadoresCache;
     const mes = todayIso().slice(0, 7);
-    const cont = new Map();
-    for (const c of [...DC.comments, ...myComments]) {
+    // contagem do servidor (comentarios_provocadores) + os comentários feitos neste navegador
+    const cont = new Map((DC.comentarios?.provocadores || []).map((p) => [p.id, p.n]));
+    for (const c of comentariosAtivos()) {
       if (c.autor.side === SIDE || !c.post.startsWith(SIDE + '-') || (c.data || '').slice(0, 7) !== mes) continue;
-      const o = byId(donoDoPost(c.post));
-      if (!o || vencido(o)) continue;
-      cont.set(o.id, (cont.get(o.id) || 0) + 1);
+      const dono = donoDoPost(c.post);
+      if (dono !== null) cont.set(dono, (cont.get(dono) || 0) + 1);
     }
-    return (provocadoresCache = [...cont].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ o: byId(id), n })));
+    return (provocadoresCache = [...cont]
+      .filter(([id]) => byId(id) && !vencido(byId(id)))
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, n]) => ({ o: byId(id), n })));
   }
   const provocadorTag = (id) => (provocadores()[0]?.o.id === id
     ? `<span class="provoc-tag" title="Quem mais recebeu comentários do outro pote em ${mesNome()}">🔥 Provocador(a) do mês</span>`
@@ -889,39 +966,295 @@
   function renderProvocadores() {
     const box = $('#provocadores');
     if (!box) return;
-    const top = provocadores().slice(0, 5);
+    const top = provocadores().slice(0, 3);
     $('#provocadores-mes').textContent = mesNome();
     box.innerHTML = top.length
       ? top.map(({ o, n }, i) => `<li${i === 0 ? ' class="first"' : ''}>
           <span class="prov-pos">${i === 0 ? '🔥' : `${i + 1}º`}</span>
           ${avatarWithSelo(o, 'prov-avatar')}
-          <span class="prov-name"><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a>
+          <span class="prov-name"><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>
             <small>${OTHER.emoji} ${n} ${n === 1 ? 'comentário' : 'comentários'} de quem é ${esc(OTHER.name)}</small></span>
         </li>`).join('')
       : `<li class="prov-empty">Ninguém provocou o outro lado este mês… ainda.</li>`;
   }
 
+  // ---------- nível ao lado do nome (tempero): mesma conta de includes/tempero.php ----------
+  // Por pessoa e por pote: R$ em itens ativos + meses no pote + participação dos últimos 12 meses.
+  // Os fatos dos dados de exemplo vêm prontos do PHP (DC.tempero); o que se faz neste navegador soma aqui.
+  const TP = DC.tempero;
+  const R = TP.regras;
+  const TOPO = R.faixas.length;
+  const temperoCache = new Map();
+  const idsCache = new Map();
+  const limparTempero = () => { temperoCache.clear(); idsCache.clear(); };
+
+  const idsMeus = (side) => {
+    if (!idsCache.has(side)) idsCache.set(side, new Set(store.get(`${side}_mine`, []).map((x) => x.id)));
+    return idsCache.get(side);
+  };
+  // "eu" = itens comprados neste navegador; nos de exemplo, o dono é o 1º item da pessoa
+  const donoDe = (side, id) => (idsMeus(side).has(id) ? 'eu' : TP.donos[side]?.[id] ?? id);
+  const inicioJanela = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - R.janela_meses);
+    return d.toISOString().slice(0, 10);
+  };
+  const mesesDesde = (iso) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    const [ty, tm, td] = todayIso().split('-').map(Number);
+    return Math.max(0, (ty - y) * 12 + tm - m - (td < d ? 1 : 0));
+  };
+  const fatosVazios = () => ({ reais: 0, meses: 0, posts: 0, comentarios: 0, recebidos: 0, recebidos_outro: 0, curtidas: 0 });
+
+  // com texto de 10+ letras (ou vídeo), no máximo 5 por dia
+  function contarComentarios(list) {
+    const porDia = new Map();
+    list.forEach((c) => {
+      if (!c.video && (c.texto || '').trim().length < R.comentario_min) return;
+      porDia.set(c.data, Math.min(R.comentarios_por_dia, (porDia.get(c.data) || 0) + 1));
+    });
+    return [...porDia.values()].reduce((a, b) => a + b, 0);
+  }
+
+  // post "lado-o42" (frase da compra) ou "lado-p…" (publicado neste navegador) → [lado, dono]
+  function donoDoPostEm(postId) {
+    const m = postId.match(/^(\w+)-o(\d+)$/);
+    if (m) return [m[1], donoDe(m[1], Number(m[2]))];
+    const p = postId.match(/^(\w+)-p/);
+    if (!p) return [null, null];
+    // publicação: minha (deste navegador) ou de alguém do banco (está no mural carregado)
+    const doBanco = p[1] === SIDE ? feed.posts.find((x) => x.id === postId) : null;
+    return [p[1], doBanco ? donoDe(p[1], doBanco.oliveId) : 'eu'];
+  }
+
+  // fatos de quem comprou neste navegador (semItem: simula o nível sem um dos itens, ex.: se vencer)
+  function fatosMeus(side, semItem = null) {
+    const f = fatosVazios();
+    const itens = store.get(`${side}_mine`, []).filter((o) => !vencido(o) && o.id !== semItem);
+    if (!itens.length) return f;
+    const janela = inicioJanela();
+    const ids = idsMeus(side);
+    itens.forEach((o) => { f.reais += DC.sides[side].types[o.tipo].price; });
+    f.meses = mesesDesde(itens.map((o) => o.desde).sort()[0]);
+    f.posts = store.get(`${side}_posts`, []).filter((p) => p.date >= janela).length;
+    f.comentarios = contarComentarios(comentariosAtivos().filter((c) => c.autor.side === side && ids.has(c.autor.id)
+      && c.data >= janela && donoDoPostEm(c.post).join() !== `${side},eu`));
+    return f;
+  }
+
+  function fatosDe(side, dono) {
+    if (dono === 'eu') return fatosMeus(side);
+    const base = TP.fatos[side]?.[dono];
+    if (!base) return fatosVazios();
+    const f = { ...base };
+    // o que se fez neste navegador também conta: comentários e curtidas nos posts da pessoa
+    const janela = inicioJanela();
+    comentariosAtivos().forEach((c) => {
+      const [lado, d] = donoDoPostEm(c.post);
+      if (lado === side && d === dono && c.data >= janela) f[c.autor.side === side ? 'recebidos' : 'recebidos_outro']++;
+    });
+    liked.forEach((postId) => { const [lado, d] = donoDoPostEm(postId); if (lado === side && d === dono) f.curtidas++; });
+    return f;
+  }
+
+  // R$ → pontos de compra, em centavos (igual a tempero_pontos_compra() no PHP)
+  const pontosCompra = (reais) => Math.floor((Math.round(reais * 100) * R.por_real) / 100);
+
+  function pontosDe(f) {
+    const compra = pontosCompra(f.reais);
+    const tempo = f.meses * R.por_mes;
+    const participacao = Math.floor(f.posts * R.post + f.comentarios * R.comentario + f.recebidos * R.recebido
+      + f.recebidos_outro * R.recebido_outro + f.curtidas * R.curtida);
+    return { compra, tempo, participacao, total: compra + tempo + participacao };
+  }
+
+  function nivelDe(p) {
+    const n = R.faixas.filter((min) => p.total >= min).length;
+    return n === TOPO && p.compra < R.topo_compra ? TOPO - 1 : n; // o topo exige compra
+  }
+
+  // pontos que faltam para o nível n (comprando: soma no total e na compra)
+  const faltaPara = (p, n) => Math.max(R.faixas[n - 1] - p.total, n === TOPO ? R.topo_compra - p.compra : 0);
+
+  // { n, p, dono } do dono do item (n = 0: sem item ativo)
+  function tempero(side, id) {
+    const dono = donoDe(side, id);
+    const key = `${side}:${dono}`;
+    if (!temperoCache.has(key)) {
+      const p = pontosDe(fatosDe(side, dono));
+      temperoCache.set(key, { n: nivelDe(p), p, dono });
+    }
+    return temperoCache.get(key);
+  }
+
+  const nivelInfo = (side, n) => DC.sides[side].tempero.niveis[n - 1];
+  const fmtPontos = (side, pts) => `${(pts * DC.sides[side].tempero.fator).toLocaleString('pt-BR')} ${DC.sides[side].tempero.unidade}`;
+
+  function nivelTag(side, id) {
+    const t = tempero(side, id);
+    if (!t.n) return '';
+    const nv = nivelInfo(side, t.n);
+    const label = `Nível ${nv.nome} · ${fmtPontos(side, t.p.total)}`;
+    return `<span class="nivel nivel-${t.n}${t.n === TOPO ? ' nivel-topo' : ''}" role="img" aria-label="${esc(label)}" title="${esc(label)}">${nv.icone}</span>`;
+  }
+
+  // meu nível neste pote, antes/depois de algo que eu fiz: avisa quando sobe
+  const meuNivel = (side) => nivelDe(pontosDe(fatosMeus(side)));
+  function avisaSubida(side, antes) {
+    limparTempero();
+    const depois = meuNivel(side);
+    if (depois <= antes) return null;
+    const nv = nivelInfo(side, depois);
+    toast(`${nv.icone} Você subiu para o nível ${nv.nome}!`, 4000);
+    avisarPorEmail(side);
+    return nv;
+  }
+
+  // logado: o servidor manda o e-mail "você subiu de nível" (uma vez por nível; /api/nivel)
+  function avisarPorEmail(side) {
+    if (!DC.logado) return;
+    const { compra, tempo, participacao } = pontosDe(fatosMeus(side));
+    fetch('api/nivel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lado: side, pontos: { compra, tempo, participacao } }),
+    }).catch(() => {}); // sem banco/e-mail: o aviso na tela já basta
+  }
+
+  // "2 pimentas Dedo-de-moça": quantas do tipo mais barato cobrem os pontos que faltam
+  function quantasFaltam(falta) {
+    const barato = Object.values(S.types).reduce((a, b) => (b.price < a.price ? b : a));
+    const qtd = Math.max(1, Math.ceil(falta / pontosCompra(barato.price)));
+    return `${qtd} ${qtd > 1 ? S.items : S.item} ${esc(barato.label)}`;
+  }
+
+  // no pedido: "com esse pedido você sobe para…" ou "falta pouco para…"
+  function nivelNudge(reais) {
+    const f = fatosMeus(SIDE);
+    const antes = nivelDe(pontosDe(f));
+    f.reais += reais;
+    const p = pontosDe(f);
+    const depois = nivelDe(p);
+    const nome = (n) => `<b>${esc(nivelInfo(SIDE, n).nome)}</b> ${nivelInfo(SIDE, n).icone}`;
+    if (depois > antes) {
+      return antes ? `Com esse pedido você sobe para o nível ${nome(depois)}` : `Você entra no pote no nível ${nome(depois)}`;
+    }
+    if (depois >= TOPO) return `Você está no nível máximo: ${nome(depois)}`;
+    const falta = faltaPara(p, depois + 1);
+    return `Faltam ${fmtPontos(SIDE, falta)} para o nível ${nome(depois + 1)}: com mais ${quantasFaltam(falta)} você chega lá.`;
+  }
+
   const themeVars = (sd) => Object.entries(sd.theme).map(([k, v]) => `--${k}:${v}`).join(';');
 
   function commentsButton(postId) {
-    const list = commentsOf(postId);
-    const visitors = list.filter((c) => c.autor.side !== SIDE).length;
-    return `💬 ${list.length}` + (visitors ? ` <span class="visitors" title="comentários de quem é do outro pote">· ${OTHER.emoji} ${visitors}</span>` : '');
+    const total = totalComentarios(postId);
+    const visitors = visitantesDoPost(postId);
+    return `💬 ${total}` + (visitors ? ` <span class="visitors" title="comentários de quem é do outro pote">· ${OTHER.emoji} ${visitors}</span>` : '');
   }
 
+  // comentários já carregados do servidor, por post: { lista (mais antigo primeiro), mais, carregando, erro }
+  const carregados = new Map();
+  const comentarioPorId = (id) => myComments.find((c) => c.id === id)
+    || [...carregados.values()].flatMap((st) => st.lista).find((c) => c.id === id) || null;
+  // só o dono apaga: comentário feito neste navegador, por um item que é daqui
+  const souDono = (c) => myComments.includes(c) && idsMeus(c.autor.side).has(c.autor.id);
+  const trechoDe = (c) => {
+    const t = c.texto || (c.video ? '🎬 vídeo' : '');
+    return t.length > 90 ? t.slice(0, 90).trimEnd() + '…' : t;
+  };
+
   function commentHtml(c) {
+    if (c.apagado) {
+      return `<div class="comment is-apagado" data-comment-id="${esc(c.id)}">
+        <span class="comment-avatar comment-avatar-apagado" aria-hidden="true">🗑️</span>
+        <div class="comment-body"><p>Comentário apagado pelo autor.</p></div>
+      </div>`;
+    }
     const a = c.autor;
     const sd = DC.sides[a.side];
     const visitor = a.side !== SIDE;
+    const link = c.link || profileUrl(a.side, a.id);
+    // a citação mostra o trecho guardado; se o original foi apagado, avisa
+    const cita = c.cita ? `<button type="button" class="comment-cita" data-ir-comentario="${esc(c.cita.id)}">
+        <b>↩ ${esc(c.cita.nome)}</b><span>${comentarioPorId(c.cita.id)?.apagado ? 'comentário apagado' : esc(c.cita.texto)}</span>
+      </button>` : '';
     // quem vem do outro pote aparece com as cores do lado dele
-    return `<div class="comment${visitor ? ' is-visitor' : ''}"${visitor ? ` style="${themeVars(sd)}"` : ''}>
+    return `<div class="comment${visitor ? ' is-visitor' : ''}" data-comment-id="${esc(c.id)}"${visitor ? ` style="${themeVars(sd)}"` : ''}>
       ${avatarWithSelo(a, 'comment-avatar')}
       <div class="comment-body">
-        <div class="comment-head">${a.id ? `<a class="name-link" href="${profileUrl(a.side, a.id)}">${esc(a.nome)}</a>` : `<b>${esc(a.nome)}</b>`}${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
+        <div class="comment-head">${a.id ? `<a class="name-link" href="${esc(link)}">${esc(a.nome)}</a>${nivelTag(a.side, a.id)}` : `<b>${esc(a.nome)}</b>`}${visitor ? `<span class="side-tag">${sd.emoji} ${esc(sd.name)}</span>` : ''}</div>
+        ${cita}
         ${c.texto ? `<p>${esc(c.texto)}</p>` : ''}
         ${c.video ? videoBoxHtml('comment-video', c.video) : ''}
+        <div class="comment-actions">
+          ${me() ? `<button type="button" data-citar="${esc(c.id)}">↩ Citar</button>` : ''}
+          ${souDono(c) ? `<button type="button" class="comment-apagar" data-apagar="${esc(c.id)}">Apagar</button>` : ''}
+        </div>
       </div>
     </div>`;
+  }
+
+  // lista do mais recente para o mais antigo: os feitos neste navegador, depois os do servidor;
+  // no fim (logo acima da caixa de escrever) o "ver mais", que traz os 10 anteriores ali mesmo
+  function listaComentariosHtml(postId) {
+    const st = carregados.get(postId);
+    const itens = [...locaisDoPost(postId)].reverse().concat([...(st?.lista || [])].reverse());
+    let fim = '';
+    if (st?.carregando) fim = '<p class="comment-loading">Carregando comentários…</p>';
+    else if (st?.erro) fim = `<button type="button" class="comment-more" data-mais-comentarios="${postId}">Não deu para carregar. Tentar de novo</button>`;
+    else if (st?.mais) fim = `<button type="button" class="comment-more" data-mais-comentarios="${postId}">Ver mais comentários</button>`;
+    if (!itens.length && !fim) return '<p class="comment-empty">Ninguém comentou ainda. Os dois lados podem comentar.</p>';
+    return itens.map(commentHtml).join('') + fim;
+  }
+
+  function refreshListaComentarios(postId) {
+    const post = $(`.post[data-post-id="${postId}"]`);
+    if (!post) return;
+    $('[data-toggle-comments]', post).innerHTML = commentsButton(postId);
+    const lista = $('.comment-list', post);
+    if (lista) lista.innerHTML = listaComentariosHtml(postId);
+  }
+
+  // busca no servidor: os 10 mais recentes ou, com "anteriores", os 10 antes do mais antigo já mostrado
+  async function carregarComentarios(postId, anteriores = false) {
+    const st = carregados.get(postId) || { lista: [], mais: false };
+    if (st.carregando) return;
+    Object.assign(st, { carregando: true, erro: false });
+    carregados.set(postId, st);
+    refreshListaComentarios(postId);
+    try {
+      const res = await fetch('api/comentarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ post: postId, antes: anteriores ? st.lista[0]?.id ?? null : null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.erro);
+      data.comentarios.forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
+      st.lista = anteriores ? [...data.comentarios, ...st.lista] : data.comentarios;
+      st.mais = data.mais;
+    } catch {
+      st.erro = true;
+    }
+    st.carregando = false;
+    refreshListaComentarios(postId);
+  }
+
+  // ao abrir os comentários de um post: busca a 1ª página, se o servidor tiver comentários dele
+  function abrirComentarios(postId) {
+    if (!carregados.has(postId) && (CONTAGEM[postId]?.total || 0) > 0) carregarComentarios(postId);
+  }
+
+  // citar: aparece "Respondendo a Fulano" em cima da caixa (dá para cancelar)
+  const citando = new Map(); // postId → { id, nome, texto }
+  function mostrarCitacao(form) {
+    $('.comment-citando', form)?.remove();
+    const cita = citando.get(form.dataset.post);
+    if (!cita) return;
+    $('.comment-box', form).insertAdjacentHTML('afterbegin', `<div class="comment-citando">
+      <span>↩ Respondendo a <b>${esc(cita.nome)}</b>: “${esc(cita.texto)}”</span>
+      <button type="button" data-cancelar-cita aria-label="Cancelar citação">×</button>
+    </div>`);
   }
 
   function commentFormHtml(postId) {
@@ -929,24 +1262,27 @@
     if (!eu) {
       return `<p class="comment-cta">Para comentar, garanta sua ${S.item} ${S.emoji}
         <button class="btn btn-gold btn-sm" type="button" data-open-buy>Garantir</button>
-        ou uma ${OTHER.item} ${OTHER.emoji} <a href="pote.php?lado=${OTHER.slug}">no outro pote</a>.</p>`;
+        ou uma ${OTHER.item} ${OTHER.emoji} <a href="${esc(poteUrl(OTHER.slug))}">no outro pote</a>.</p>`;
     }
     const sd = DC.sides[eu.side];
     return `<form class="comment-form" data-post="${postId}">
       ${avatarWithSelo(eu, 'comment-avatar')}
-      <div class="comment-input">
-        <input name="texto" maxlength="400" autocomplete="off"
-          placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})… ou cole um link de vídeo">
-        <small class="comment-hint">Responda com texto ou com um vídeo do YouTube/TikTok (é só colar o link).</small>
+      <div class="comment-box">
+        <textarea name="texto" rows="3" maxlength="400" aria-label="Seu comentário"
+          placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})… ou cole um link de vídeo"></textarea>
+        <div class="comment-box-foot">
+          <small class="comment-hint">${DICA_COMENTARIO}</small>
+          <span class="comment-count">0/${COMENTARIO_MAX}</span>
+          <button class="comment-send" type="submit" disabled aria-label="Enviar comentário" title="Enviar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+          </button>
+        </div>
       </div>
-      <button class="btn btn-gold btn-sm">Enviar</button>
     </form>`;
   }
 
   function commentsSectionHtml(postId) {
-    const list = commentsOf(postId);
-    return `<div class="comment-list">${list.length ? list.map(commentHtml).join('') : '<p class="comment-empty">Ninguém comentou ainda. Os dois lados podem comentar.</p>'}</div>
-      ${commentFormHtml(postId)}`;
+    return `<div class="comment-list">${listaComentariosHtml(postId)}</div>${commentFormHtml(postId)}`;
   }
 
   function refreshComments(postId) {
@@ -962,7 +1298,7 @@
     return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}">
       <div class="post-head">
         ${avatarWithSelo(o, 'post-avatar' + (anelDe(o) ? ' tempo-' + anelDe(o) : ''))}
-        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
+        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
       ${p.video ? videoBoxHtml('post-video', p.video) : ''}
@@ -977,21 +1313,39 @@
   }
 
   function renderFeed() {
-    const posts = allPosts();
-    $('#feed').innerHTML = posts.slice(0, shown).map(postHtml).join('');
-    $('#feed-more').hidden = shown >= posts.length;
+    const posts = postsNaTela();
+    $('#feed').innerHTML = posts.map(postHtml).join('')
+      || (feed.carregando ? '' : '<p class="comment-empty">Nenhuma publicação ainda.</p>');
+    // "Carregar mais": só quando o servidor tem mais (ou para tentar de novo se falhou)
+    const mais = $('#feed-more');
+    mais.hidden = !feed.mais && !feed.erro && !feed.carregando;
+    mais.disabled = feed.carregando;
+    mais.textContent = feed.carregando ? 'Carregando…' : feed.erro ? 'Não deu para carregar. Tentar de novo' : 'Carregar mais';
+    openComments.forEach(abrirComentarios); // comentários que ficaram abertos: carrega se ainda não veio
   }
 
-  // ao colar um link no comentário, avisa que vai como resposta em vídeo
+  // caixa de comentário: contador, botão enviar só com conteúdo, e link colado vira resposta em vídeo
   $('#feed').addEventListener('input', (e) => {
-    const input = e.target.closest('.comment-form input[name="texto"]');
-    if (!input) return;
-    const { video, text } = extractVideo(input.value);
-    const hint = input.parentElement.querySelector('.comment-hint');
+    const campo = e.target.closest('.comment-form textarea[name="texto"]');
+    if (!campo) return;
+    const form = campo.closest('.comment-form');
+    const { video, text } = extractVideo(campo.value);
+    const hint = $('.comment-hint', form);
     hint.classList.toggle('on', !!video);
-    hint.textContent = video
-      ? `▶ Resposta em vídeo do ${providerName(video)}${text ? ' + texto' : ''}`
-      : 'Responda com texto ou com um vídeo do YouTube/TikTok (é só colar o link).';
+    hint.textContent = video ? `▶ Resposta em vídeo do ${providerName(video)}${text ? ' + texto' : ''}` : DICA_COMENTARIO;
+    const cont = $('.comment-count', form);
+    cont.textContent = `${text.length}/${COMENTARIO_MAX}`;
+    cont.classList.toggle('over', text.length > COMENTARIO_MAX);
+    $('.comment-send', form).disabled = (!text && !video) || text.length > COMENTARIO_MAX;
+  });
+
+  // no computador: Enter envia, Shift+Enter pula linha (no celular o Enter pula linha e envia pelo botão)
+  $('#feed').addEventListener('keydown', (e) => {
+    const campo = e.target.closest('.comment-form textarea[name="texto"]');
+    if (!campo || e.key !== 'Enter' || e.shiftKey || e.isComposing || matchMedia('(hover: none)').matches) return;
+    e.preventDefault();
+    const enviar = $('.comment-send', campo.closest('.comment-form'));
+    if (!enviar.disabled) campo.form.requestSubmit(enviar);
   });
 
   $('#feed').addEventListener('submit', (e) => {
@@ -1001,28 +1355,38 @@
     const eu = me();
     const { video, text } = extractVideo(form.elements.texto.value); // link de vídeo vira resposta em vídeo
     if (!eu || (!text && !video)) return;
-    if (text.length > 200) { toast('Comentário: até 200 caracteres (sem contar o link do vídeo)'); return; }
+    if (text.length > COMENTARIO_MAX) { toast(`Comentário: até ${COMENTARIO_MAX} caracteres (sem contar o link do vídeo)`); return; }
+    const nivelAntes = meuNivel(eu.side);
     myComments.push({
+      id: `l${Date.now()}`,
       post: form.dataset.post,
       autor: { id: eu.id, side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
       texto: text || null,
       video,
+      cita: citando.get(form.dataset.post) || null, // guarda o trecho: continua legível mesmo se o original sumir
       data: todayIso(),
     });
+    citando.delete(form.dataset.post);
     store.set('comments', myComments);
     provocadoresCache = null; // o ranking do mês pode mudar
+    avisaSubida(eu.side, nivelAntes); // comentar também sobe o nível (e o de quem recebeu)
     refreshComments(form.dataset.post);
     renderProvocadores();
-    $(`.post[data-post-id="${form.dataset.post}"] .comment-form input`)?.focus();
+    // o novo vai para o topo da lista: rola até ele e dá um destaque, para ver que publicou
+    const novo = $(`.post[data-post-id="${form.dataset.post}"] .comment-list .comment`);
+    if (novo) {
+      novo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      novo.classList.add('destaque');
+    }
   });
 
   $$('.tab').forEach((t) => t.addEventListener('click', () => {
     $$('.tab').forEach((x) => x.classList.toggle('active', x === t));
+    if (sort === t.dataset.sort) return;
     sort = t.dataset.sort;
-    shown = PAGE;
-    renderFeed();
+    carregarPosts(true); // outra ordem: busca a 1ª página de novo no servidor
   }));
-  $('#feed-more').addEventListener('click', () => { shown += PAGE; renderFeed(); });
+  $('#feed-more').addEventListener('click', () => carregarPosts());
 
   $('#feed').addEventListener('click', (e) => {
     const like = e.target.closest('[data-like]');
@@ -1037,7 +1401,67 @@
       toggle.classList.toggle('active', open);
       box.innerHTML = open ? commentsSectionHtml(id) : '';
       box.hidden = !open;
-      if (open) $('input', box)?.focus({ preventScroll: true });
+      if (open) {
+        abrirComentarios(id);
+        $('textarea', box)?.focus({ preventScroll: true });
+      }
+    }
+
+    // "ver comentários anteriores" (ou tentar de novo, se falhou)
+    const mais = e.target.closest('[data-mais-comentarios]');
+    if (mais) {
+      const id = mais.dataset.maisComentarios;
+      carregarComentarios(id, (carregados.get(id)?.lista.length || 0) > 0);
+    }
+
+    // citar: guarda quem e o trecho, mostra em cima da caixa e leva o cursor para lá
+    const citar = e.target.closest('[data-citar]');
+    if (citar) {
+      const c = comentarioPorId(citar.dataset.citar);
+      const form = $('.comment-form', citar.closest('.post'));
+      if (c && form) {
+        citando.set(form.dataset.post, { id: c.id, nome: c.autor.nome, texto: trechoDe(c) });
+        mostrarCitacao(form);
+        form.elements.texto.focus();
+      }
+    }
+    if (e.target.closest('[data-cancelar-cita]')) {
+      const form = e.target.closest('.comment-form');
+      citando.delete(form.dataset.post);
+      mostrarCitacao(form);
+    }
+
+    // clicar na citação leva ao comentário original (se ele já estiver na tela)
+    const ir = e.target.closest('[data-ir-comentario]');
+    if (ir) {
+      const alvo = $(`[data-comment-id="${CSS.escape(ir.dataset.irComentario)}"]`);
+      if (alvo && !alvo.contains(ir)) {
+        alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alvo.classList.remove('destaque');
+        requestAnimationFrame(() => alvo.classList.add('destaque'));
+      } else {
+        toast('Esse comentário é mais antigo: clique em "Ver mais comentários".');
+      }
+    }
+
+    // apagar (só o dono): 1º clique pede confirmação, 2º apaga — fica o aviso "comentário apagado"
+    const apagar = e.target.closest('[data-apagar]');
+    if (apagar) {
+      const c = myComments.find((x) => x.id === apagar.dataset.apagar);
+      if (!c || !souDono(c)) return;
+      if (!apagar.classList.contains('confirmar')) {
+        apagar.classList.add('confirmar');
+        apagar.textContent = 'Apagar mesmo?';
+        setTimeout(() => { apagar.classList.remove('confirmar'); apagar.textContent = 'Apagar'; }, 4000);
+        return;
+      }
+      Object.assign(c, { apagado: true, texto: null, video: null, cita: null });
+      store.set('comments', myComments);
+      provocadoresCache = null; // deixa de contar para provocadores e níveis
+      limparTempero();
+      refreshListaComentarios(c.post);
+      renderProvocadores();
+      toast('Comentário apagado.');
     }
     if (e.target.closest('[data-play]')) playVideo(e.target.closest('[data-video]'));
     if (e.target.closest('[data-stop]')) stopVideo(e.target.closest('[data-video]'));
@@ -1045,12 +1469,13 @@
       const id = like.dataset.like;
       liked.has(id) ? liked.delete(id) : liked.add(id);
       store.set('likes', [...liked]);
-      const p = allPosts().find((x) => x.id === id);
+      limparTempero(); // curtida recebida conta no nível do autor
+      const p = postsNaTela().find((x) => x.id === id);
       like.classList.toggle('liked', liked.has(id));
       like.textContent = `${S.emoji} ${likesOf(p)}`;
     }
     if (share) {
-      const p = allPosts().find((x) => x.id === share.dataset.sharePost);
+      const p = postsNaTela().find((x) => x.id === share.dataset.sharePost);
       const o = byId(p.oliveId);
       const text = `"${p.text || 'Olha esse vídeo'}" — ${o.nome}, ${S.since} ${fmtDate(o.desde)} ${S.emoji}`;
       if (navigator.share) navigator.share({ title: S.name, text, url: oliveUrl(o) }).catch(() => {});
@@ -1096,19 +1521,26 @@
   composer?.addEventListener('submit', (e) => {
     e.preventDefault();
     const eu = mine[mine.length - 1];
-    if (!eu) { goStep(1); openModal('#buy-modal'); return; }
+    if (!eu) { goStep(1); openModal('#buy-modal'); updateTotal(); return; }
     const { video, text } = extractVideo(composerText.value);
     if (!text && !video) return;
     if (text.length > TEXT_MAX) { toast(`Máximo de ${TEXT_MAX} caracteres (sem contar o link)`); return; }
+    const nivelAntes = meuNivel(SIDE);
     myPosts.unshift({ id: `${SIDE}-p${Date.now()}`, oliveId: eu.id, text, video, date: todayIso(), likes: 0 });
     store.set(`${SIDE}_posts`, myPosts);
     if (video) refreshOlive(eu); // aparece o selo de play no item
     composerText.value = '';
     updateComposerPreview();
-    sort = 'recentes';
     $$('.tab').forEach((x) => x.classList.toggle('active', x.dataset.sort === 'recentes'));
-    renderFeed();
-    toast('Publicado no mural!');
+    const subiu = avisaSubida(SIDE, nivelAntes);
+    // o post novo aparece no topo; se estava em outra aba, volta para "Recentes" (busca de novo no servidor)
+    if (sort !== 'recentes') {
+      sort = 'recentes';
+      carregarPosts(true);
+    } else {
+      renderFeed();
+    }
+    if (!subiu) toast('Publicado no mural!');
   });
 
   // ranking: recém-chegados ao pote (inclui quem acabou de comprar neste navegador)
@@ -1122,12 +1554,12 @@
     if (!box) return;
     const recentes = [...noPote()]
       .sort((a, b) => b.desde.localeCompare(a.desde) || b.id - a.id)
-      .slice(0, 5);
+      .slice(0, 3);
     box.innerHTML = recentes.map((o) => `<li>
       <a href="${profileUrl(SIDE, o.id)}">
         <span class="num">${numero(o.id)}</span>
         ${avatarWithSelo(o, 'post-avatar')}
-        <span><b>${esc(o.nome)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · <span class="when">${quandoEntrou(o.desde)}</span></small></span>
+        <span><b>${esc(o.nome)}${nivelTag(SIDE, o.id)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · <span class="when">${quandoEntrou(o.desde)}</span></small></span>
       </a>
     </li>`).join('');
   }
@@ -1193,7 +1625,7 @@
     if (!DC.logado) { location.href = DC.loginUrl; return; } // volta para a enquete depois de entrar
     $$('[data-vote]').forEach((b) => { b.disabled = true; });
     try {
-      const res = await fetch('api/enquete.php', {
+      const res = await fetch('api/enquete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enquete: DC.enquete.id, opcao: Number(btn.dataset.vote), lado: SIDE }),
@@ -1208,6 +1640,239 @@
     }
     renderPoll();
   });
+
+  // ---------- mapa da guerra dos potes (partials/mapa.php) ----------
+  // Cada estado com a cor de quem tem mais itens lá; o mesmo mapa nos dois potes, textos de S.mapa.
+  const MAPA_NEUTRO = '#3b3a31';
+  const preencher = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
+  const qtdItens = (n, sd = S) => `${n} ${n === 1 ? sd.item : sd.items}`;
+
+  // do neutro (t = 0) até a cor cheia (t = 1)
+  function misturar(hex, t) {
+    const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const a = rgb(MAPA_NEUTRO);
+    const b = rgb(hex);
+    return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join('');
+  }
+
+  // uf → { esquerda: n, direita: n }: dados do pote + compras deste navegador
+  function contagemMapa() {
+    const c = {};
+    const soma = (uf, s, n) => { (c[uf] ??= Object.fromEntries(DUEL_ORDER.map((x) => [x, 0])))[s] += n; };
+    DUEL_ORDER.forEach((s) => {
+      Object.entries(DC.mapa?.contagem?.[s] || {}).forEach(([uf, n]) => soma(uf, s, n));
+      store.get(`${s}_mine`, []).filter((o) => !vencido(o)).forEach((o) => soma(o.uf, s, 1));
+    });
+    return c;
+  }
+
+  // m = meus, d = deles (do ponto de vista deste pote)
+  function estadoMapa(c, uf) {
+    const m = c[uf]?.[SIDE] || 0;
+    const d = c[uf]?.[S.other] || 0;
+    return { m, d, dono: m > d ? SIDE : d > m ? S.other : m ? 'empate' : null };
+  }
+
+  function textoEstado(uf, e) {
+    const M = S.mapa;
+    if (e.dono === SIDE) return preencher(M.estado_meu, { dif: qtdItens(e.m - e.d) });
+    if (e.dono === S.other) return preencher(M.estado_deles, { falta: e.d - e.m + 1, itens: e.d - e.m + 1 === 1 ? S.item : S.items });
+    return e.dono === 'empate' ? M.estado_empate : M.estado_vazio;
+  }
+
+  // ---------- quem manda no estado (👑) ----------
+  // A pessoa do pote que domina o estado com mais valor em itens ali (item mais caro pesa mais).
+  // Empate entre os potes ou entre os dois primeiros: ninguém manda.
+  const centavos = (tipo, s) => Math.round(DC.sides[s].types[tipo].price * 100);
+
+  function candidatosUf(uf, s) {
+    const lista = (DC.mapa?.reis?.[s]?.[uf] || []).map((r) => ({ ...r, side: s }));
+    const meus = store.get(`${s}_mine`, []).filter((o) => !vencido(o) && o.uf === uf);
+    if (meus.length) {
+      const itens = {};
+      meus.forEach((o) => { itens[o.tipo] = (itens[o.tipo] || 0) + 1; });
+      const cara = meus[0];
+      lista.push({ dono: 'eu', side: s, id: cara.id, nome: nomeProprio(cara.nome), foto: cara.foto, tipo: cara.tipo, selo: cara.selo,
+        valor: meus.reduce((v, o) => v + centavos(o.tipo, s), 0), itens });
+    }
+    return lista.sort((a, b) => b.valor - a.valor);
+  }
+
+  function reiDe(uf, e) {
+    if (!e.dono || e.dono === 'empate') return null;
+    const [rei, vice] = candidatosUf(uf, e.dono);
+    if (!rei || (vice && vice.valor === rei.valor)) return null;
+    return { rei };
+  }
+
+  function reiHtml(uf, r) {
+    const { rei } = r;
+    const sd = DC.sides[rei.side];
+    const itens = Object.entries(rei.itens).map(([tipo, n]) =>
+      `<span class="rei-item">${itemSvg(tipo, rei.side)}${n}× ${esc(typeLabel(tipo, rei.side))}</span>`).join('');
+    // o recado depende de quem olha: a coroa é minha, do meu time ou do outro pote.
+    // Nunca mostra quanto alguém gastou: a diferença vira "mais N itens" (do tipo mais barato).
+    let recado;
+    if (rei.dono === 'eu' && rei.side === SIDE) {
+      recado = S.mapa.rei_eu;
+    } else if (rei.side === SIDE) {
+      const meu = candidatosUf(uf, SIDE).find((c) => c.dono === 'eu')?.valor || 0;
+      const barato = Object.values(S.types).reduce((a, b) => (b.price < a.price ? b : a));
+      const qtd = Math.max(1, Math.ceil((rei.valor - meu + 1) / Math.round(barato.price * 100)));
+      recado = preencher(S.mapa.rei_time, { falta: `${qtd} ${qtd > 1 ? S.items : S.item} ${barato.label}` });
+    } else {
+      recado = S.mapa.rei_deles;
+    }
+    return `<div class="mapa-rei" style="${themeVars(sd)}">
+        <span class="rei-coroa" aria-hidden="true">👑</span>
+        ${avatarWithSelo({ ...rei, nome: rei.nome || '?' }, 'rei-avatar')}
+        <div class="rei-info">
+          <small>Quem manda em ${uf}</small>
+          <a class="name-link" href="${profileUrl(rei.side, rei.id)}">${esc(rei.dono === 'eu' ? `${rei.nome} (você)` : rei.nome)}${nivelTag(rei.side, rei.id)}</a>
+          <span class="rei-itens">${itens}</span>
+        </div>
+      </div>
+      <p class="rei-recado">${esc(recado)}</p>`;
+  }
+
+  let mapaAtivo = null;
+  function mostrarEstado(uf) {
+    const box = $('#mapa-estado');
+    const path = $(`#mapa .uf[data-uf="${uf}"]`);
+    if (!box || !path) return;
+    mapaAtivo = uf;
+    $$('#mapa .uf.is-ativo').forEach((p) => p.classList.remove('is-ativo'));
+    path.classList.add('is-ativo');
+    path.parentNode.appendChild(path); // borda por cima das vizinhas
+    const e = estadoMapa(contagemMapa(), uf);
+    const r = reiDe(uf, e);
+    const cont =(s) => `<span style="color:${DC.sides[s].mapa.cor}">${DC.sides[s].emoji} <b>${(e[s === SIDE ? 'm' : 'd']).toLocaleString('pt-BR')}</b></span>`;
+    box.innerHTML = `<div class="mapa-estado-head"><b>${esc(path.dataset.nome)}</b><span class="mapa-estado-placar">${DUEL_ORDER.map(cont).join(' × ')}</span></div>
+      <p>${esc(textoEstado(uf, e))}</p>
+      ${r ? reiHtml(uf, r) : ''}
+      ${e.dono === SIDE && r?.rei.dono === 'eu' ? '' : `<button class="btn btn-gold btn-sm" type="button" data-conquistar="${uf}">${e.dono === SIDE ? `Quero a coroa de ${uf} 👑` : `Conquistar ${uf} ${S.emoji}`}</button>`}`;
+  }
+
+  // onde falta menos para virar o estado (os disputados primeiro; terra de ninguém completa a lista)
+  function estadosPorUmFio(c, max = 3) {
+    const todos = $$('#mapa .uf').map((p) => ({ uf: p.dataset.uf, nome: p.dataset.nome, ...estadoMapa(c, p.dataset.uf) }))
+      .filter((e) => e.dono !== SIDE)
+      .map((e) => ({ ...e, falta: e.d - e.m + 1 }))
+      .sort((a, b) => a.falta - b.falta || (b.m + b.d) - (a.m + a.d) || a.nome.localeCompare(b.nome));
+    const disputados = todos.filter((e) => e.dono).slice(0, max - 1);
+    return [...disputados, ...todos.filter((e) => !e.dono)].slice(0, max);
+  }
+
+  function renderMapa() {
+    const box = $('#mapa');
+    if (!box) return;
+    const c = contagemMapa();
+    const estados = Object.fromEntries(DUEL_ORDER.map((s) => [s, 0]));
+    const totais = Object.fromEntries(DUEL_ORDER.map((s) => [s, 0]));
+    $$('.uf', box).forEach((p) => {
+      const e = estadoMapa(c, p.dataset.uf);
+      DUEL_ORDER.forEach((s) => { totais[s] += c[p.dataset.uf]?.[s] || 0; });
+      let fill = MAPA_NEUTRO;
+      if (e.dono === 'empate') fill = 'url(#mapa-empate)';
+      else if (e.dono) {
+        estados[e.dono]++;
+        // vantagem apertada = cor mais fraca; só um lado no estado = cor cheia
+        fill = misturar(DC.sides[e.dono].mapa.cor, Math.max(e.m, e.d) / (e.m + e.d));
+      }
+      p.style.fill = fill;
+      p.classList.toggle('is-meu', e.dono === SIDE);
+      // 👑 acima da sigla quando alguém manda no estado (a minha coroa brilha)
+      const rotulo = $(`.mapa-rotulos text[data-uf="${p.dataset.uf}"]`, box);
+      const r = reiDe(p.dataset.uf, e);
+      let coroa = $(`.mapa-coroas [data-uf="${p.dataset.uf}"]`, box);
+      if (r && rotulo) {
+        if (!coroa) {
+          coroa = document.createElementNS(SVG, 'text');
+          coroa.dataset.uf = p.dataset.uf;
+          coroa.setAttribute('x', rotulo.getAttribute('x'));
+          coroa.setAttribute('y', Number(rotulo.getAttribute('y')) - 22);
+          coroa.textContent = '👑';
+          $('.mapa-coroas', box).appendChild(coroa);
+        }
+        coroa.classList.toggle('is-minha', r.rei.dono === 'eu');
+      } else coroa?.remove();
+    });
+
+    const meus = estados[SIDE];
+    const deles = estados[S.other];
+    $('#mapa-manchete').textContent = preencher(meus > deles ? S.mapa.ganhando : meus < deles ? S.mapa.perdendo : S.mapa.empate, { meus, deles });
+
+    const total = Math.max(1, estados.esquerda + estados.direita);
+    $('#mapa-placar').innerHTML = `
+      <div class="mapa-placar-nums">${DUEL_ORDER.map((s) => `<div class="${s === SIDE ? 'is-meu' : ''}" style="--cor:${DC.sides[s].mapa.cor}">
+          <b>${estados[s]}</b><small>${DC.sides[s].emoji} ${estados[s] === 1 ? 'estado' : 'estados'}</small><span>${qtdItens(totais[s], DC.sides[s])}</span>
+        </div>`).join('<em>×</em>')}</div>
+      <div class="mapa-placar-barra">${DUEL_ORDER.map((s) => `<i style="width:${((estados[s] / total) * 100).toFixed(1)}%;background:${DC.sides[s].mapa.cor}"></i>`).join('')}</div>`;
+
+    $('#mapa-fio').innerHTML = estadosPorUmFio(c).map((e) => `<li>
+        <span class="fio-uf">${e.uf}</span>
+        <span class="fio-nome"><b>${esc(e.nome)}</b><small>${e.dono ? `faltam ${qtdItens(e.falta)}` : 'ninguém chegou: 1 já leva'}</small></span>
+        <button class="btn btn-ghost btn-sm" type="button" data-conquistar="${e.uf}">Conquistar</button>
+      </li>`).join('') || `<li class="prov-empty">Todos os estados são seus. Por enquanto. ${S.emoji}</li>`;
+
+    if (mapaAtivo) mostrarEstado(mapaAtivo);
+    else $('#mapa-estado').innerHTML = `<p class="mapa-dica">Passe o mouse (ou toque) num estado para ver quem manda lá.</p>`;
+  }
+
+  if ($('#mapa')) {
+    const svg = $('#mapa .mapa');
+    // só redesenha quando muda de estado (trazer o estado para frente dispara o mouseover de novo)
+    const escolher = (e) => { const p = e.target.closest('.uf'); if (p && p.dataset.uf !== mapaAtivo) mostrarEstado(p.dataset.uf); };
+    svg.addEventListener('mouseover', escolher);
+    svg.addEventListener('focusin', escolher);
+    svg.addEventListener('click', escolher);
+
+    // "Conquistar SP": abre a compra com o estado já escolhido
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-conquistar]');
+      if (!btn) return;
+      goStep(1);
+      openModal('#buy-modal');
+      buyForm.elements.uf.value = btn.dataset.conquistar;
+      updateTotal();
+      buyForm.elements.nome.focus();
+    });
+
+    // chamar reforço: compartilha citando o estado mais disputado
+    $('#mapa-indicar').addEventListener('click', () => {
+      const alvo = estadosPorUmFio(contagemMapa())[0];
+      const text = preencher(S.mapa.indicar, { uf: alvo ? alvo.nome : 'o Brasil' });
+      const url = new URL(`${poteUrl(SIDE)}#mapa${alvo ? '-' + alvo.uf : ''}`, location.href).href; // abre já no estado
+      if (navigator.share) navigator.share({ title: S.name, text, url }).catch(() => {});
+      else window.open(`https://wa.me/?text=${encodeURIComponent(text + url)}`, '_blank', 'noopener');
+    });
+  }
+
+  // links cifrados das compras deste navegador (o servidor gera; ficam guardados) — depois redesenha os links
+  let pedindoLinks = null;
+  function garantirLinksLocais() {
+    const faltam = Object.keys(DC.sides)
+      .flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ lado: s, id: o.id })))
+      .filter((x) => !linkPerfilExato(x.lado, x.id));
+    if (!faltam.length) return Promise.resolve();
+    pedindoLinks ??= fetch('api/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itens: faltam }),
+    })
+      .then((res) => res.json())
+      .then(({ links }) => {
+        Object.entries(links || {}).forEach(([s, porId]) => Object.entries(porId).forEach(([id, u]) => { linksLocais[`${s}:${id}`] = u; }));
+        store.set('links', linksLocais);
+        renderFeed();
+        renderNewest();
+        renderProvocadores();
+        updateMyProfileLink();
+      })
+      .catch(() => {}) // sem servidor: os links desses itens levam ao pote
+      .finally(() => { pedindoLinks = null; });
+    return pedindoLinks;
+  }
 
   // ---------- perfil (perfil.php) ----------
 
@@ -1238,14 +1903,71 @@
     return owner ? { side, o: owner, text: p.text || '(vídeo)' } : null;
   }
 
+  // nível no perfil: pontos, barra até o próximo, de onde vêm os pontos e (para a própria pessoa) o que falta
+  function nivelCardHtml(o, isMine) {
+    const t = tempero(SIDE, o.id);
+    if (!t.n) return '';
+    const nv = nivelInfo(SIDE, t.n);
+    const topo = t.n >= TOPO;
+    const de = R.faixas[t.n - 1];
+    const pct = topo ? 100 : Math.min(100, Math.max(3, ((t.p.total - de) / (R.faixas[t.n] - de)) * 100));
+    let prox = `Nível máximo do pote. ${isMine ? 'Você' : esc(o.nome.split(' ')[0])} está no topo!`;
+    if (!topo) {
+      const pn = nivelInfo(SIDE, t.n + 1);
+      const falta = faltaPara(t.p, t.n + 1);
+      // já tem os pontos, mas o topo exige também compra
+      prox = t.p.total >= R.faixas[t.n]
+        ? `O nível <b>${esc(pn.nome)}</b> ${pn.icone} exige também ${money(R.topo_compra / R.por_real)} em ${S.items} no pote: faltam ${money(falta / R.por_real)}.`
+        : `Faltam <b>${fmtPontos(SIDE, falta)}</b> para o nível <b>${esc(pn.nome)}</b> ${pn.icone}.`;
+      if (isMine) {
+        prox += ` Com mais ${quantasFaltam(falta)} você chega lá${t.n + 1 < TOPO ? ' — ou publicando e comentando no mural' : ''}.`;
+      }
+    }
+    const parte = (label, v) => `<span>${label} <b>${fmtPontos(SIDE, v)}</b></span>`;
+    return `<div class="profile-nivel${topo ? ' is-topo' : ''}">
+      <div class="profile-nivel-head">
+        <span class="nivel-icone" aria-hidden="true">${nv.icone}</span>
+        <span class="nivel-nome"><small>${esc(S.tempero.titulo)}</small><b>${esc(nv.nome)}</b></span>
+        <span class="nivel-pontos">${fmtPontos(SIDE, t.p.total)}</span>
+      </div>
+      <span class="nivel-bar"><i style="width:${pct.toFixed(0)}%"></i></span>
+      <p class="nivel-prox">${prox}</p>
+      <p class="nivel-partes">${parte(`${S.Item}s no pote`, t.p.compra)}${parte('Tempo no pote', t.p.tempo)}${parte('Participação', t.p.participacao)}</p>
+    </div>`;
+  }
+
+  // perto de vencer: "se esta vencer, você cai para…"
+  function nivelPerdaHtml(o) {
+    const agora = meuNivel(SIDE);
+    const sem = nivelDe(pontosDe(fatosMeus(SIDE, o.id)));
+    if (sem >= agora) return '';
+    return `<span class="nivel-perda">⚠ Se ela vencer, você ${sem ? `cai para o nível <b>${esc(nivelInfo(SIDE, sem).nome)}</b> ${nivelInfo(SIDE, sem).icone}` : 'perde seu nível'}.</span>`;
+  }
+
   function renderProfile() {
     const card = $('#profile-card');
+    // "Ver meu perfil" (perfil com meu=1): vai para o item de quem comprou neste navegador
+    if (DC.meu) {
+      const eu = me();
+      if (eu) {
+        const ir = () => { const u = linkPerfilExato(eu.side, eu.id); if (u) location.replace(u); };
+        linkPerfilExato(eu.side, eu.id) ? ir() : garantirLinksLocais().then(ir); // link ainda não pedido ao servidor
+        return;
+      }
+      card.innerHTML = `<div class="profile-missing">
+        <h1>Seu perfil ainda está vazio</h1>
+        <p>O perfil aparece assim que você tem uma ${S.item} no pote: com certificado, nível, publicações e comentários.</p>
+        <button class="btn btn-gold" type="button" data-open-buy>Quero minha ${S.item} ${S.emoji}</button>
+      </div>`;
+      $$('.profile-side, .profile-stats-wrap, #mural, .profile-page > .section.alt').forEach((el) => { el.hidden = true; });
+      return;
+    }
     const o = byId(DC.profileId);
     if (!o) {
       card.innerHTML = `<div class="profile-missing">
         <h1>Perfil não encontrado</h1>
         <p>Essa ${S.item} não está no pote (ou o link está errado).</p>
-        <a class="btn btn-gold" href="pote.php?lado=${SIDE}">Voltar ao pote ${S.emoji}</a>
+        <a class="btn btn-gold" href="${esc(poteUrl(SIDE))}">Voltar ao pote ${S.emoji}</a>
       </div>`;
       $$('.profile-side, .profile-stats-wrap, #mural, .profile-page > .section.alt').forEach((el) => { el.hidden = true; });
       return;
@@ -1253,9 +1975,10 @@
 
     const isMine = mine.some((m) => m.id === o.id);
     const posts = allPosts();
-    const received = posts.flatMap((p) => commentsOf(p.id));
-    const visitors = received.filter((c) => c.autor.side !== SIDE);
-    const made = [...DC.comments, ...myComments].filter((c) => c.autor.side === SIDE && c.autor.id === o.id);
+    const received = posts.reduce((n, p) => n + totalComentarios(p.id), 0);
+    const visitors = posts.reduce((n, p) => n + visitantesDoPost(p.id), 0);
+    // o que a pessoa comentou (servidor: DC.comentarios.feitos) + o que foi feito neste navegador; apagados não entram
+    const made = [...(DC.comentarios?.feitos || []), ...comentariosAtivos()].filter((c) => c.autor.side === SIDE && c.autor.id === o.id);
     const madeOther = made.filter((c) => !c.post.startsWith(SIDE + '-'));
     const likes = posts.reduce((n, p) => n + likesOf(p), 0);
     const vale = validade(o);
@@ -1281,7 +2004,7 @@
       <div class="profile-main">
         <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo' + (anel && !venceu ? ' tempo-' + anel : ''))}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
         <div class="profile-id">
-          <h1>${esc(o.nome)}</h1>
+          <h1>${esc(o.nome)}${nivelTag(SIDE, o.id)}</h1>
           <p class="profile-meta">📍 ${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.Item)} ${esc(typeLabel(o.tipo))}</p>
         </div>
         <div class="profile-since">
@@ -1290,6 +2013,7 @@
         </div>
         <blockquote class="profile-quote">“${esc(o.frase)}”</blockquote>
         ${badges.length ? `<ul class="profile-badges">${badges.map(([k, t]) => `<li class="badge-${k}">${esc(t)}</li>`).join('')}</ul>` : ''}
+        ${nivelCardHtml(o, isMine)}
         ${isMine ? (venceu
           ? `<div class="profile-validity is-expired">
               <span>⏳ Sua ${S.item} venceu em <b>${fmtDate(vale)}</b> e saiu do pote.</span>
@@ -1300,20 +2024,26 @@
               <span>Sua ${S.item} fica no pote até <b>${fmtDate(vale)}</b>${faltam <= 30 ? ` — <b>faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}</b>` : ''}.</span>
               <span class="validity-bar"><i style="width:${Math.min(100, Math.max(3, (1 - faltam / 365) * 100)).toFixed(0)}%"></i></span>
               <span class="validity-rule">Renovando antes de vencer, continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anel ? ` e com o anel de ${anel}` : ''}. Se vencer, a data recomeça do zero.</span>
+              ${faltam <= 30 ? nivelPerdaHtml(o) : ''}
               <button class="btn btn-ghost btn-sm" type="button" data-renew="${o.id}">Renovar por +1 ano · ${preco}</button>
             </div>`) : ''}
         <div class="profile-actions">
           <button class="btn btn-gold" type="button" data-view="${o.id}">Ver certificado</button>
           <button class="btn btn-ghost" type="button" data-share-profile>Compartilhar perfil</button>
           ${isMine ? `<button class="btn btn-ghost" type="button" data-open-buy>+ Mais ${S.items}</button>` : ''}
+          ${isMine && DC.logado ? `<form class="profile-logout" method="post" action="sair">
+              <input type="hidden" name="csrf" value="${esc(DC.csrf)}">
+              <input type="hidden" name="r" value="${esc(DC.pagina)}">
+              <button class="btn btn-link">Sair da conta</button>
+            </form>` : ''}
         </div>
       </div>`;
 
     $('#profile-stats').innerHTML = [
       [S.emoji, likes, 'curtidas recebidas'],
       ['📝', posts.length, posts.length === 1 ? 'publicação' : 'publicações'],
-      ['💬', received.length, 'comentários recebidos'],
-      [OTHER.emoji, visitors.length, `comentários de quem é ${OTHER.name}`],
+      ['💬', received, 'comentários recebidos'],
+      [OTHER.emoji, visitors, `comentários de quem é ${OTHER.name}`],
       ['🗣️', made.length, 'comentários feitos'],
     ].map(([icon, n, label]) => `<div class="stat-card"><span>${icon}</span><b>${n.toLocaleString('pt-BR')}</b><small>${esc(label)}</small></div>`).join('');
 
@@ -1391,12 +2121,14 @@
       o.valido_ate = addYear(todayIso());
     }
     store.set(`${SIDE}_mine`, mine);
+    limparTempero(); // item vencido que volta ao pote devolve o nível
     closeModals();
     toast(manteve ? `Renovada! Continua desde ${fmtDate(o.desde)}.` : `De volta ao pote! Agora desde ${fmtDate(o.desde)}.`);
     if ($('#jar')) renderJar();
     updateStats();
     renderFeed();
     renderNewest();
+    renderMapa(); // item vencido que volta pinta o estado de novo
     if (DC.profileId !== undefined) renderProfile();
   });
 
@@ -1410,14 +2142,26 @@
   });
 
   // botão "Meu perfil" no topo (qualquer item comprado, em qualquer pote)
+  // logado: o botão "Meu perfil" (canto direito) é o menu da conta; o link para o perfil fica dentro dele
   function updateMyProfileLink() {
     const eu = me();
-    const link = $('#my-profile');
-    if (!eu || !link) return;
-    link.href = profileUrl(eu.side, eu.id);
-    link.innerHTML = `${avatarHtml(eu, 'my-profile-avatar')}<span>Meu perfil</span>`;
-    link.hidden = false;
+    const menu = $('#my-profile-menu');
+    const exato = eu && linkPerfilExato(eu.side, eu.id);
+    if (exato && menu) menu.href = exato; // sem item (ou sem link ainda), fica o "meu perfil" do servidor
+    // o botão da conta mostra a foto da pessoa (a do item comprado), no lugar da inicial
+    const ini = $('.user-menu summary .user-initial');
+    if (eu?.foto && ini) ini.outerHTML = avatarHtml(eu, 'user-initial');
   }
+
+  // menus do topo (conta e sanduíche): fecham ao tocar fora, num link ou com Esc; só um aberto por vez
+  const menusTopo = $$('.topo-menu');
+  document.addEventListener('click', (e) => {
+    menusTopo.forEach((m) => { if (m.open && (!m.contains(e.target) || e.target.closest('.topo-menu-box a'))) m.open = false; });
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menusTopo.forEach((m) => { m.open = false; }); });
+  menusTopo.forEach((m) => m.addEventListener('toggle', () => {
+    if (m.open) menusTopo.forEach((o) => { if (o !== m) o.open = false; });
+  }));
 
   // ---------- início ----------
   if ($('#jar')) {
@@ -1433,9 +2177,17 @@
   renderPoll();
   renderProvocadores();
   renderNewest();
+  renderMapa();
+  garantirLinksLocais(); // links cifrados das compras feitas neste navegador
+  // link para um estado: pote?c=…#mapa-SP (usado no "Chamar reforço")
+  const hashUf = location.hash.match(/^#mapa-([A-Z]{2})$/);
+  if (hashUf && $(`#mapa .uf[data-uf="${hashUf[1]}"]`)) {
+    mostrarEstado(hashUf[1]);
+    $('#mapa').scrollIntoView();
+  }
   if (DC.profileId !== undefined) renderProfile();
 
-  // link compartilhado: pote.php?lado=direita#azeitona-97 abre direto o certificado
+  // link compartilhado: pote?c=…#azeitona-97 abre direto o certificado
   const m = location.hash.match(new RegExp(`^#${S.item}-(\\d+)$`));
   if (m) openCert(byId(Number(m[1])));
 })();

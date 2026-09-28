@@ -10,11 +10,12 @@ if (PHP_SAPI !== 'cli' && extension_loaded('zlib') && !headers_sent()) {
     ini_set('zlib.output_compression', '1');
 }
 
-const JAR_CAPACITY = 10000;
+const JAR_CAPACITY = 50000;
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
 require __DIR__ . '/sides.php';
+require __DIR__ . '/rotas.php'; // url() e rota_params(): rotas sem .php e parâmetros cifrados
 
 // Escapa texto para HTML
 function e(?string $s): string

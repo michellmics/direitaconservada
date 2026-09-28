@@ -159,11 +159,12 @@ function usar_link(string $token): ?string
     return destino_seguro($link['redirecionar']);
 }
 
-// Só deixa voltar para páginas do próprio site (nada de redirecionar para fora)
+// Só deixa voltar para páginas do próprio site (nada de redirecionar para fora):
+// "./", "pote?c=…", "perfil?c=…" (parâmetros cifrados, ver includes/rotas.php), com âncora opcional
 function destino_seguro(?string $r): string
 {
     $r = (string) $r;
-    return preg_match('/^(index|pote|perfil)\.php(\?[\w=&%.\-]*)?(#[\w-]*)?$/', $r) ? $r : 'index.php';
+    return preg_match('/^(\.\/|pote|perfil)(\?c=[A-Za-z0-9_-]+)?(#[\w-]*)?$/', $r) ? $r : './';
 }
 
 // ---------- CSRF (cookie + campo escondido) ----------

@@ -1,0 +1,23 @@
+# Rotas sem ".php" (Apache / LiteSpeed, ex.: Hostinger). No "php -S", quem faz isso é o router.php.
+#   /pote?c=…  → pote.php      /admin/frases → admin/frases.php      /pote.php?… → redireciona para /pote?…
+Options -MultiViews -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+
+# pastas e arquivos internos nunca são servidos (.env, includes, dados, migrations…)
+RewriteRule ^(includes|data|database|partials|vendor)(/|$) - [R=404,L]
+RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
+RewriteRule ^router\.php$ - [R=404,L]
+
+# quem pede ".php" vai para a rota sem a extensão (só GET; mantém o ?c=…)
+RewriteCond %{REQUEST_METHOD} =GET
+RewriteCond %{THE_REQUEST} \s/+([^?\s]*?)(?:index)?\.php[?\s] [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+
+# rota sem extensão → arquivo .php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+?)/?$ $1.php [L]
+</IfModule>

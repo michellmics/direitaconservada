@@ -36,7 +36,7 @@ function expirar_itens(): int
  * Provocadores do mês: quem mais recebeu comentários de gente do OUTRO pote
  * nos posts publicados no mural do próprio pote. O 1º ganha o selo "Provocador(a) do mês".
  */
-function provocadores_do_mes(string $lado, ?string $mes = null, int $limite = 5): array
+function provocadores_do_mes(string $lado, ?string $mes = null, int $limite = 3): array
 {
     $mes = $mes ?? date('Y-m');
     $st = db()->prepare("SELECT autor.id, autor.nome, autor.foto_path, autor.numero, COUNT(*) AS comentarios_do_outro_lado

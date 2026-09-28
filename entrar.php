@@ -2,13 +2,16 @@
 // Entrar com link mágico:
 //   GET               formulário (e-mail + nome na primeira vez)
 //   POST acao=pedir   gera o link e envia por e-mail
-//   GET ?token=…      tela "Entrar" (não gasta o link: filtros de e-mail abrem links sozinhos)
+//   GET token (cifrado) tela "Entrar" (não gasta o link: filtros de e-mail abrem links sozinhos)
 //   POST acao=entrar  gasta o link, abre a sessão e volta para onde a pessoa estava
+// Parâmetros no ?c=… cifrado (lado, r = para onde voltar, token): ver includes/rotas.php.
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/includes/auth.php';
 
-$S = side($_GET['lado'] ?? $_POST['lado'] ?? 'direita');
-$r = destino_seguro($_GET['r'] ?? $_POST['r'] ?? ('pote.php?lado=' . $S['slug']));
+$P = rota_params(['lado', 'r', 'token']); // links antigos (?token=…) de e-mails já enviados continuam valendo
+$S = side($P['lado'] ?? $_POST['lado'] ?? 'direita');
+$r = destino_seguro($P['r'] ?? $_POST['r'] ?? url('pote', ['lado' => $S['slug']]));
+$tokenLink = (string) ($P['token'] ?? '');
 $tela = 'form';
 $erro = null;
 $email = '';
@@ -29,8 +32,7 @@ try {
         $res = pedir_link($email, $nome, $r);
         if (isset($res['token'])) {
           require_once __DIR__ . '/includes/mailer.php';
-          $url = rtrim((string) env('APP_URL', 'http://localhost:8080'), '/')
-            . '/entrar.php?token=' . $res['token'] . '&lado=' . $S['slug'];
+          $url = url_absoluta('entrar', ['token' => $res['token'], 'lado' => $S['slug']]);
           [$assunto, $html, $texto] = email_link_login($S, nome_proprio($res['usuario']['nome']), $url);
           if (enviar_email($email, nome_proprio($res['usuario']['nome']), $assunto, $html, $texto) !== null) {
             $erro = 'Não conseguimos enviar o e-mail agora. Tente de novo em alguns minutos.';
@@ -51,8 +53,8 @@ try {
       }
       $tela = 'invalido';
     }
-  } elseif (isset($_GET['token'])) {
-    $link = ver_link((string) $_GET['token']);
+  } elseif ($tokenLink !== '') {
+    $link = ver_link($tokenLink);
     $tela = $link ? 'confirmar' : 'invalido';
   } elseif (current_user()) {
     $tela = 'logado';
@@ -69,13 +71,13 @@ require __DIR__ . '/includes/header.php';
 ?>
 <main class="auth-page">
   <section class="auth-card">
-    <div class="auth-emoji"><?= item_svg($S, array_key_first($S['types']), 'auth-item', 1.4) ?></div>
+    <div class="auth-emoji"><?= item_svg($S, $S['logo'], 'auth-item', 1.4) ?></div>
 
     <?php if ($tela === 'enviado'): ?>
       <h1>Confira seu e-mail</h1>
       <p>Se <b><?= e($email) ?></b> estiver certo, o link para entrar chega em instantes.</p>
       <p class="auth-small">Ele vale por <?= LINK_MINUTOS ?> minutos. Não achou? Olhe no spam ou em “Promoções”.</p>
-      <a class="btn btn-ghost" href="entrar.php?lado=<?= $S['slug'] ?>&r=<?= urlencode($r) ?>">Usar outro e-mail</a>
+      <a class="btn btn-ghost" href="<?= e(url('entrar', ['lado' => $S['slug'], 'r' => $r])) ?>">Usar outro e-mail</a>
 
     <?php elseif ($tela === 'confirmar'): ?>
       <h1>Olá, <?= e(explode(' ', nome_proprio($link['nome']))[0]) ?>!</h1>
@@ -83,7 +85,7 @@ require __DIR__ . '/includes/header.php';
       <form method="post">
         <input type="hidden" name="csrf" value="<?= e($csrf) ?>">
         <input type="hidden" name="acao" value="entrar">
-        <input type="hidden" name="token" value="<?= e((string) $_GET['token']) ?>">
+        <input type="hidden" name="token" value="<?= e($tokenLink) ?>">
         <input type="hidden" name="lado" value="<?= $S['slug'] ?>">
         <button class="btn btn-gold btn-block">Entrar <?= $S['emoji'] ?></button>
       </form>
@@ -91,7 +93,7 @@ require __DIR__ . '/includes/header.php';
     <?php elseif ($tela === 'invalido'): ?>
       <h1>Este link não vale mais</h1>
       <p>Ele já foi usado ou passou dos <?= LINK_MINUTOS ?> minutos. Peça um novo — é rapidinho.</p>
-      <a class="btn btn-gold" href="entrar.php?lado=<?= $S['slug'] ?>">Pedir novo link</a>
+      <a class="btn btn-gold" href="<?= e(url('entrar', ['lado' => $S['slug']])) ?>">Pedir novo link</a>
 
     <?php elseif ($tela === 'logado'): ?>
       <h1>Você já entrou</h1>
@@ -122,5 +124,4 @@ require __DIR__ . '/includes/header.php';
   </section>
 </main>
 <?php
-$comments = [];
 require __DIR__ . '/includes/footer.php';

@@ -1,18 +1,20 @@
 <?php
-// Perfil de quem está no pote: perfil.php?lado=direita&id=42
+// Perfil de quem está no pote: /perfil?c=… (cifrado: lado + id, ou lado + meu=1; ver includes/rotas.php)
 // O cartão é montado pelo JS (assim funciona também para quem acabou de comprar,
 // cujos dados ainda estão só no navegador). Com o banco, dá para montar tudo aqui no PHP.
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/data/mock.php';
+require __DIR__ . '/includes/tempero.php';
+require __DIR__ . '/includes/comentarios.php';
+require __DIR__ . '/includes/posts.php';
 
-$S  = side($_GET['lado'] ?? 'direita');
+$P  = rota_params(['lado', 'id', 'meu']);
+$S  = side($P['lado'] ?? 'direita');
 $O  = side($S['other']);
-$id = max(0, (int) ($_GET['id'] ?? 0));
+$id = max(0, (int) ($P['id'] ?? 0));
 
 $items      = mock_items($S['slug']);
 $otherItems = mock_items($O['slug']);
-// comentários dos dois potes: para mostrar o que a pessoa comentou aqui e do outro lado
-$comments = array_merge(mock_comments($S['slug'], $items), mock_comments($O['slug'], $otherItems));
 
 $person = null;
 foreach ($items as $it) {
@@ -29,7 +31,16 @@ if ($person) {
 // só o necessário do outro pote (para dar contexto aos comentários feitos lá)
 $extraJs = [
     'profileId'  => $id,
+    'meu'        => !empty($P['meu']), // "Ver meu perfil" do menu da conta
+    'tempero'    => tempero_mock(),
     'otherItems' => array_map(fn($o) => array_intersect_key($o, array_flip(['id', 'side', 'nome', 'frase', 'foto', 'tipo', 'selo'])), $otherItems),
+    // os comentários dos posts vêm de /api/comentarios (10 por vez); aqui as contagens e o que a pessoa comentou
+    'comentarios' => [
+        'contagem'     => comentarios_contagem($S['slug']),
+        'provocadores' => comentarios_provocadores($S['slug']),
+        'feitos'       => comentarios_feitos($S['slug'], $id),
+    ],
+    'feed'        => posts_pagina($S['slug'], 'recentes', 0, $id ?: null), // posts da pessoa, 12 por vez
 ];
 
 require __DIR__ . '/includes/header.php';
