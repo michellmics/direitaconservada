@@ -16,35 +16,35 @@ $aviso = null;
 $p = null;
 
 try {
-    $p = presente_buscar($token);
-    $U0 = current_user();
-    if ($p && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        if (!csrf_publico_ok($_POST['csrf'] ?? null)) {
-            $erro = 'A página ficou aberta tempo demais. Tente de novo.';
-        } elseif (!limite_ok('presente', 10)) { // rate limit por IP
-            $erro = 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
+  $p = presente_buscar($token);
+  $U0 = current_user();
+  if ($p && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!csrf_publico_ok($_POST['csrf'] ?? null)) {
+      $erro = 'A página ficou aberta tempo demais. Tente de novo.';
+    } elseif (!limite_ok('presente', 10)) { // rate limit por IP
+      $erro = 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
+    } else {
+      $voltar = url('presente', ['t' => $token]);
+      $u = pedido_usuario($U0, (string) ($_POST['email'] ?? ''), (string) $p['nome'], $p['lado'], $voltar, 'toque em “Resgatar”');
+      if (isset($u['login'])) {
+        $tela = 'link';
+        $aviso = $u['login'];
+      } elseif (isset($u['erro'])) {
+        $erro = $u['erro'];
+      } else {
+        $r = presente_resgatar($token, $u['id']);
+        if (isset($r['erro'])) {
+          $erro = $r['erro'];
         } else {
-            $voltar = url('presente', ['t' => $token]);
-            $u = pedido_usuario($U0, (string) ($_POST['email'] ?? ''), (string) $p['nome'], $p['lado'], $voltar, 'toque em “Resgatar”');
-            if (isset($u['login'])) {
-                $tela = 'link';
-                $aviso = $u['login'];
-            } elseif (isset($u['erro'])) {
-                $erro = $u['erro'];
-            } else {
-                $r = presente_resgatar($token, $u['id']);
-                if (isset($r['erro'])) {
-                    $erro = $r['erro'];
-                } else {
-                    header('Location: ' . url('perfil', ['lado' => $r['lado'], 'id' => $r['numero']]));
-                    exit;
-                }
-            }
+          header('Location: ' . url('perfil', ['lado' => $r['lado'], 'id' => $r['numero']]));
+          exit;
         }
+      }
     }
+  }
 } catch (PDOException $ex) {
-    logar('erro', 'sistema', 'erro_tratado', 'presente: ' . $ex->getMessage(), [], null, false, 500);
-    $erro = 'O resgate está indisponível agora. Tente de novo em instantes.';
+  logar('erro', 'sistema', 'erro_tratado', 'presente: ' . $ex->getMessage(), [], null, false, 500);
+  $erro = 'O resgate está indisponível agora. Tente de novo em instantes.';
 }
 
 $U0 = current_user();
