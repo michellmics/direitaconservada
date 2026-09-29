@@ -10,7 +10,7 @@
     </div>
     <div class="hero-cta">
       <button class="btn btn-gold" data-open-buy>Entrar no pote · a partir de <?= money(min_price($S)) ?>/ano</button>
-      <a class="btn btn-ghost" href="#mural">er o mural</a>
+      <a class="btn btn-ghost" href="#mural">Ver o mural</a>
     </div>
   </div>
 
