@@ -7,21 +7,21 @@
 --                         renovou, a validade muda e os avisos recomeçam no próximo vencimento)
 -- =====================================================================
 
-CREATE TABLE alertas_estado (
+CREATE TABLE IF NOT EXISTS alertas_estado (
     chave         VARCHAR(60)  NOT NULL,
     valor         VARCHAR(255) NOT NULL,
     atualizado_em DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (chave)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE alertas_enviados (
+CREATE TABLE IF NOT EXISTS alertas_enviados (
     tipo        VARCHAR(30)     NOT NULL,
     ref_id      BIGINT UNSIGNED NOT NULL,
     enviado_em  DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (tipo, ref_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE item_avisos_vencimento (
+CREATE TABLE IF NOT EXISTS item_avisos_vencimento (
     item_id     BIGINT UNSIGNED  NOT NULL,
     faixa       TINYINT UNSIGNED NOT NULL,   -- 30, 15, 10, 5 ou 1 dia(s) antes
     valido_ate  DATE             NOT NULL,

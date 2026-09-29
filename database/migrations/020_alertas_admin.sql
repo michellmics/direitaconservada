@@ -7,7 +7,7 @@
 --   enviado_em   último e-mail mandado
 -- =====================================================================
 
-CREATE TABLE pedido_alertas (
+CREATE TABLE IF NOT EXISTS pedido_alertas (
     pedido_id   BIGINT UNSIGNED NOT NULL,
     evento      VARCHAR(20)     NOT NULL,
     vezes       INT UNSIGNED    NOT NULL DEFAULT 0,
