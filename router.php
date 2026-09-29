@@ -34,7 +34,7 @@ if (preg_match('#^(.*?)(/index)?\.php$#', $caminho, $m) && is_file($raiz . $cami
 } elseif (is_file($raiz . $caminho)) {
     // No Windows o "php -S" corta arquivos estáticos acima de ~64 KB (app.js e style.css passam disso):
     // texto sai pelo PHP comprimido (gzip), bem abaixo do limite. Imagens e o resto: servidor embutido direto.
-    $tipos = ['css' => 'text/css', 'js' => 'text/javascript', 'svg' => 'image/svg+xml', 'json' => 'application/json'];
+    $tipos = ['css' => 'text/css', 'js' => 'text/javascript', 'svg' => 'image/svg+xml', 'json' => 'application/json', 'webmanifest' => 'application/manifest+json'];
     $ext = strtolower(pathinfo($caminho, PATHINFO_EXTENSION));
     if (!isset($tipos[$ext])) {
         return false;

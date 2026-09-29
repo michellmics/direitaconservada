@@ -10,7 +10,9 @@
     </div>
     <div class="hero-cta">
       <button class="btn btn-gold" data-open-buy>Entrar no pote · a partir de <?= money(min_price($S)) ?>/ano</button>
-      <a class="btn btn-ghost" href="#mural">Ver o mural</a>
+      <?php // no celular sem o app, "Instalar o app" toma o lugar de "Ver o mural" (ver assets/js/pwa.js) ?>
+      <a class="btn btn-ghost" href="#mural" data-sem-instalar>Ver o mural</a>
+      <button type="button" class="btn btn-ghost" data-instalar-app="celular" hidden>📲 Instalar o app</button>
     </div>
   </div>
 

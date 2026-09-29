@@ -131,3 +131,57 @@ function links_para_js(string $lado, array $items, array $comments, array $extra
     }
     return ['pote' => $potes, 'perfil' => $perfil, 'meuPerfil' => url('perfil', ['lado' => $lado, 'meu' => 1])];
 }
+
+/**
+ * Tags de compartilhamento (WhatsApp, Facebook, X…): título, descrição e a imagem 1200×630 (assets/img/og-*.png).
+ * Endereços absolutos (APP_URL): o WhatsApp não aceita caminho relativo. O ?v= força o WhatsApp a baixar de novo
+ * quando a imagem muda (ele guarda em cache).
+ */
+function og_tags(string $titulo, string $descricao, string $imagem): string
+{
+    $base = rtrim((string) env('APP_URL', 'http://localhost:8080'), '/');
+    $arq = dirname(__DIR__) . "/assets/img/$imagem";
+    $img = "$base/assets/img/$imagem" . (is_file($arq) ? '?v=' . filemtime($arq) : '');
+    $pagina = $base . (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . rawurlencode((string) $_GET[URL_PARAM]) : '');
+    $t = fn(string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    return implode("\n  ", [
+        '<meta property="og:type" content="website">',
+        '<meta property="og:site_name" content="' . $t(SITE_NAME) . '">',
+        '<meta property="og:locale" content="pt_BR">',
+        '<meta property="og:url" content="' . $t($pagina) . '">',
+        '<meta property="og:title" content="' . $t($titulo) . '">',
+        '<meta property="og:description" content="' . $t($descricao) . '">',
+        '<meta property="og:image" content="' . $t($img) . '">',
+        '<meta property="og:image:width" content="1200">',
+        '<meta property="og:image:height" content="630">',
+        '<meta property="og:image:alt" content="' . $t($titulo) . '">',
+        '<meta name="twitter:card" content="summary_large_image">',
+        '<meta name="twitter:image" content="' . $t($img) . '">',
+    ]);
+}
+
+/**
+ * Caminho de CSS/JS com ?v= = data do arquivo: mudou o arquivo, muda o endereço, e o navegador (e o celular)
+ * baixa a versão nova em vez de usar a do cache. Não precisa mudar número à mão.
+ */
+function asset(string $caminho): string
+{
+    $arq = dirname(__DIR__) . '/' . $caminho;
+    return $caminho . (is_file($arq) ? '?v=' . filemtime($arq) : '');
+}
+
+/** App (PWA): manifest, ícones (PC, Android e iPhone), tags da Apple e o script que registra o service worker. */
+function pwa_tags(): string
+{
+    return implode("\n  ", [
+        '<link rel="manifest" href="manifest.webmanifest">',
+        '<link rel="icon" type="image/png" sizes="32x32" href="' . asset('assets/img/favicon-32.png') . '">',
+        '<link rel="icon" type="image/png" sizes="192x192" href="' . asset('assets/img/icon-192.png') . '">',
+        '<link rel="apple-touch-icon" href="' . asset('assets/img/apple-touch-icon.png') . '">',
+        '<meta name="apple-mobile-web-app-capable" content="yes">',
+        '<meta name="mobile-web-app-capable" content="yes">',
+        '<meta name="apple-mobile-web-app-title" content="Pote Político">',
+        '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
+        '<script src="' . asset('assets/js/pwa.js') . '" defer></script>',
+    ]);
+}

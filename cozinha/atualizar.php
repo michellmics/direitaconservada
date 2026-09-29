@@ -48,7 +48,7 @@ $curto = fn(?string $sha) => $sha ? substr($sha, 0, 7) : '—';
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../<?= asset('assets/css/style.css') ?>">
 </head>
 <body class="admin-page">
   <header class="topbar adm-topbar">
@@ -112,6 +112,6 @@ $curto = fn(?string $sha) => $sha ? substr($sha, 0, 7) : '—';
       <?php endif; ?>
     </section>
   </main>
-  <script src="../assets/js/admin.js"></script>
+  <script src="../<?= asset('assets/js/admin.js') ?>"></script>
 </body>
 </html>

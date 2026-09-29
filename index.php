@@ -20,15 +20,14 @@ $total = array_sum($count);
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Escolha seu pote · <?= e(SITE_NAME) ?></title>
   <meta name="description" content="Direita Conservada ou Pimenta da Resistência? Escolha seu pote, garanta seu lugar e debata com o outro lado.">
-  <meta property="og:title" content="<?= e(SITE_NAME) ?>">
-  <meta property="og:description" content="Escolha seu pote: azeitona conservada ou pimenta da resistência.">
+  <?= og_tags('Escolha seu pote · ' . SITE_NAME, 'Direita Conservada ou Pimenta da Resistência? Entre no pote e debata com o outro lado.', 'og-inicio.png') ?>
   <meta name="theme-color" content="#120e0a">
-  <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🫙</text></svg>') ?>">
+  <?= pwa_tags() ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
-  <script src="assets/js/pote-agito.js" defer></script>
+  <link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
+  <script src="<?= asset('assets/js/pote-agito.js') ?>" defer></script>
 </head>
 
 <body class="choose-page">
@@ -73,6 +72,7 @@ $total = array_sum($count);
   </main>
 
   <footer class="footer">
+    <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
     <p>© <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
   </footer>
 </body>

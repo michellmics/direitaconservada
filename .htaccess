@@ -30,3 +30,11 @@ RewriteRule ^(.+?)/?$ $1.php [L]
 <FilesMatch "^(\.env.*|README\.md|composer\.(json|lock))$">
     Require all denied
 </FilesMatch>
+
+# App (PWA): tipo do manifest e o service worker sempre conferido (senão os aparelhos demoram a pegar a versão nova)
+AddType application/manifest+json .webmanifest
+<IfModule mod_headers.c>
+    <FilesMatch "^(sw\.js|manifest\.webmanifest)$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>

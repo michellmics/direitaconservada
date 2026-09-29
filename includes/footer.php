@@ -1,6 +1,7 @@
   <?php require_once __DIR__ . '/frases.php'; ?>
   <footer class="footer">
     <?php if ($fraseRodape = frase('rodape', $S['slug'])): ?><p class="rodape-piada"><?= e($fraseRodape) ?></p><?php endif; ?>
+    <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
     <p><b><?= e($S['name']) ?></b> · <a href="./">Trocar de pote</a> · © <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
   </footer>
 
@@ -49,7 +50,7 @@
         'links'    => links_para_js($S['slug'], $items, $extraJs['comentarios']['feitos'] ?? [], ($extraJs ?? []) + ['meus' => $conta['meus'], 'presentes' => $conta['presentes']]),
     ] + ($extraJs ?? []), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   </script>
-  <script src="assets/js/app.js"></script>
+  <script src="<?= asset('assets/js/app.js') ?>"></script>
   <?php endif; ?>
 </body>
 </html>

@@ -15,15 +15,14 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($pageTitle) ?></title>
   <meta name="description" content="<?= e($S['og']) ?>">
-  <meta property="og:title" content="<?= e($S['name']) ?>">
-  <meta property="og:description" content="<?= e($S['og']) ?>">
+  <?= og_tags($S['name'] . ' · ' . SITE_NAME, $S['og'], 'og-' . $S['slug'] . '.png') ?>
   <meta name="theme-color" content="<?= $S['theme']['bg'] ?>">
-  <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">' . $S['emoji'] . '</text></svg>') ?>">
+  <?= pwa_tags() ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
-  <script src="assets/js/pote-agito.js" defer></script>
+  <link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
+  <script src="<?= asset('assets/js/pote-agito.js') ?>" defer></script>
 </head>
 <body class="lado-<?= $S['slug'] ?>">
   <?php require __DIR__ . '/../partials/sprites.php'; ?>

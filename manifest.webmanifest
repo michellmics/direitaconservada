@@ -1,0 +1,89 @@
+{
+    "name": "Pote Político — Direita Conservada × Pimenta da Resistência",
+    "short_name": "Pote Político",
+    "description": "Escolha seu pote, garanta sua azeitona ou pimenta e debata com o outro lado.",
+    "lang": "pt-BR",
+    "id": "./",
+    "start_url": "./?origem=app",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "background_color": "#140f0b",
+    "theme_color": "#140f0b",
+    "categories": [
+        "social",
+        "entertainment",
+        "news"
+    ],
+    "icons": [
+        {
+            "src": "assets/img/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "assets/img/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "assets/img/icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "assets/img/capturas/celular-inicio.jpg",
+            "sizes": "1080x1920",
+            "type": "image/jpeg",
+            "form_factor": "narrow",
+            "label": "Escolha seu pote: Direita Conservada ou Pimenta da Resistência"
+        },
+        {
+            "src": "assets/img/capturas/celular-pote.jpg",
+            "sizes": "1080x1920",
+            "type": "image/jpeg",
+            "form_factor": "narrow",
+            "label": "O pote cheio: cada azeitona é uma pessoa"
+        },
+        {
+            "src": "assets/img/capturas/celular-mapa.jpg",
+            "sizes": "1080x1920",
+            "type": "image/jpeg",
+            "form_factor": "narrow",
+            "label": "A guerra dos potes no mapa do Brasil"
+        },
+        {
+            "src": "assets/img/capturas/celular-mural.jpg",
+            "sizes": "1080x1920",
+            "type": "image/jpeg",
+            "form_factor": "narrow",
+            "label": "O mural: publique e debata com o outro lado"
+        },
+        {
+            "src": "assets/img/capturas/pc-inicio.jpg",
+            "sizes": "1920x1080",
+            "type": "image/jpeg",
+            "form_factor": "wide",
+            "label": "Escolha seu pote"
+        },
+        {
+            "src": "assets/img/capturas/pc-pote.jpg",
+            "sizes": "1920x1080",
+            "type": "image/jpeg",
+            "form_factor": "wide",
+            "label": "O pote da Pimenta da Resistência"
+        },
+        {
+            "src": "assets/img/capturas/pc-mapa.jpg",
+            "sizes": "1920x1080",
+            "type": "image/jpeg",
+            "form_factor": "wide",
+            "label": "Quem manda em cada estado"
+        }
+    ]
+}

@@ -1228,8 +1228,8 @@
       ? top.map(({ o, n }, i) => `<li${i === 0 ? ' class="first"' : ''}>
           <span class="prov-pos">${i === 0 ? '🔥' : `${i + 1}º`}</span>
           ${avatarWithSelo(o, 'prov-avatar')}
-          <span class="prov-name"><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>
-            <small>${OTHER.emoji} ${n} ${n === 1 ? 'comentário' : 'comentários'} de quem é ${esc(OTHER.name)}</small></span>
+          <span class="prov-name"><a class="name-link nome-linha" href="${profileUrl(SIDE, o.id)}"><span class="nome-corte">${esc(o.nome)}</span>${nivelTag(SIDE, o.id)}</a>
+            <small title="comentários de quem é ${esc(OTHER.name)}">${OTHER.emoji} ${n} ${n === 1 ? 'comentário recebido' : 'comentários recebidos'}</small></span>
         </li>`).join('')
       : `<li class="prov-empty">Ninguém provocou o outro lado este mês… ainda.</li>`;
   }
@@ -1582,14 +1582,13 @@
     return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}">
       <div class="post-head">
         ${avatarWithSelo(o, 'post-avatar' + (anelDe(o) ? ' tempo-' + anelDe(o) : ''))}
-        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.since)} ${fmtDate(o.desde)}</small></div>
+        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)}</small></div>
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
       ${p.video ? videoBoxHtml('post-video', p.video) : ''}
       <div class="post-actions">
         <button data-like="${p.id}" class="${liked.has(p.id) ? 'liked' : ''}">${S.emoji} ${likesOf(p)}</button>
         <button data-toggle-comments="${p.id}" class="${open ? 'active' : ''}">${commentsButton(p.id)}</button>
-        <button data-share-post="${p.id}">Compartilhar</button>
       </div>
       <div class="comments"${open ? '' : ' hidden'}>${open ? commentsSectionHtml(p.id) : ''}</div>
     </article>`;
@@ -1683,7 +1682,6 @@
 
   $('#feed').addEventListener('click', (e) => {
     const like = e.target.closest('[data-like]');
-    const share = e.target.closest('[data-share-post]');
     const toggle = e.target.closest('[data-toggle-comments]');
     if (toggle) {
       const id = toggle.dataset.toggleComments;
@@ -1783,13 +1781,6 @@
         toast(err.message, 4000);
       });
     }
-    if (share) {
-      const p = postsNaTela().find((x) => x.id === share.dataset.sharePost);
-      const o = byId(p.oliveId);
-      const text = `"${p.text || 'Olha esse vídeo'}" — ${o.nome}, ${S.since} ${fmtDate(o.desde)} ${S.emoji}`;
-      if (navigator.share) navigator.share({ title: S.name, text, url: oliveUrl(o) }).catch(() => {});
-      else window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + oliveUrl(o))}`, '_blank', 'noopener');
-    }
   });
 
   // composer: só quem tem item deste pote publica (comentar vale para os dois lados)
@@ -1862,11 +1853,7 @@
     if (!subiu) toast('Publicado no mural!');
   });
 
-  // ranking: recém-chegados ao pote (inclui quem acabou de comprar neste navegador)
-  function quandoEntrou(iso) {
-    const d = -diasAte(iso);
-    return d <= 0 ? 'entrou hoje' : d === 1 ? 'entrou ontem' : `entrou há ${d} dias`;
-  }
+  // ranking: recém-chegados ao pote (inclui quem acabou de comprar agora)
 
   function renderNewest() {
     const box = $('#newest');
@@ -1878,7 +1865,7 @@
       <a href="${profileUrl(SIDE, o.id)}">
         <span class="num">${numero(o.id)}</span>
         ${avatarWithSelo(o, 'post-avatar')}
-        <span><b>${esc(o.nome)}${nivelTag(SIDE, o.id)}</b><small>${esc(o.cidade)}/${esc(o.uf)} · <span class="when">${quandoEntrou(o.desde)}</span></small></span>
+        <span class="lista-texto"><b class="nome-linha"><span class="nome-corte">${esc(o.nome)}</span>${nivelTag(SIDE, o.id)}</b><small>${esc(o.cidade)}/${esc(o.uf)}</small></span>
       </a>
     </li>`).join('');
   }
