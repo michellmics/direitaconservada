@@ -1,5 +1,5 @@
 <?php
-// Acesso ao painel /admin/: senha no .env (ADMIN_PASSWORD), sessão e token CSRF.
+// Acesso ao painel /cozinha/: senha no .env (ADMIN_PASSWORD), sessão e token CSRF.
 // Quando houver login de usuários, trocar por usuarios.is_admin.
 require_once __DIR__ . '/env.php';
 
@@ -33,26 +33,28 @@ function admin_login(string $senha): ?string
     if (!admin_password_configured()) {
         return 'Painel desativado: defina ADMIN_PASSWORD no .env.';
     }
-    // freio simples contra tentativa e erro
-    $falhas = $_SESSION['admin_falhas'] ?? 0;
-    if ($falhas >= 5 && ($_SESSION['admin_falha_at'] ?? 0) > time() - 300) {
-        return 'Muitas tentativas. Espere 5 minutos.';
+    // bloqueio por IP (não pela sessão: quem descarta o cookie não escapa): 5 tentativas a cada 15 minutos
+    require_once __DIR__ . '/limite.php';
+    if (!limite_ok('painel-login', 5, 900)) {
+        logar('seguranca', 'painel', 'painel_login_bloqueado', 'Login do painel bloqueado: tentativas demais deste IP', [], null, false, 429);
+        usleep(600000);
+        return 'Muitas tentativas. Espere 15 minutos.';
     }
     if (!hash_equals((string) env('ADMIN_PASSWORD'), $senha)) {
-        $_SESSION['admin_falhas'] = $falhas + 1;
-        $_SESSION['admin_falha_at'] = time();
+        logar('seguranca', 'painel', 'painel_login_falha', 'Senha errada no login do painel', ['tamanho_digitado' => mb_strlen($senha)], null, false, 401);
         usleep(600000);
         return 'Senha incorreta.';
     }
     session_regenerate_id(true);
     $_SESSION['admin'] = true;
     $_SESSION['admin_at'] = time();
-    unset($_SESSION['admin_falhas'], $_SESSION['admin_falha_at']);
+    logar('seguranca', 'painel', 'painel_login_ok', 'Entrou no painel', [], null, true, 200);
     return null;
 }
 
 function admin_logout(): void
 {
+    logar('info', 'painel', 'painel_logout', 'Saiu do painel', [], null, true);
     $_SESSION = [];
     session_destroy();
 }

@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $acao = $_POST['acao'] ?? '';
 
     if (!csrf_ok($_POST['csrf'] ?? null)) {
+        logar('aviso', 'painel', 'painel_csrf_invalido', 'Formulário do painel com token inválido/expirado', ['acao' => $_POST['acao'] ?? null]);
         flash('Sessão expirada. Tente de novo.', 'erro');
         header('Location: ./');
         exit;
@@ -43,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$erros) {
                     $publicar = ($_POST['modo'] ?? '') === 'publicar';
                     enquete_criar($dados, $publicar);
+                    logar('info', 'painel', $publicar ? 'enquete_publicada' : 'enquete_rascunho', 'Enquete: ' . $dados['pergunta'], ['lado' => $dados['lado'] ?? null], null, true);
                     flash($publicar ? 'Enquete publicada! Ela já aparece nos potes.' : 'Rascunho salvo.');
                     header('Location: ./');
                     exit;
@@ -51,21 +53,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             case 'publicar':
                 enquete_publicar($id);
+                logar('info', 'painel', 'enquete_publicada', "Enquete #$id publicada", ['id' => $id], null, true);
                 flash('Enquete no ar. A anterior foi encerrada.');
                 header('Location: ./');
                 exit;
             case 'encerrar':
                 enquete_encerrar($id);
+                logar('info', 'painel', 'enquete_encerrada', "Enquete #$id encerrada", ['id' => $id], null, true);
                 flash('Enquete encerrada.');
                 header('Location: ./');
                 exit;
             case 'excluir':
                 enquete_excluir($id);
+                logar('info', 'painel', 'enquete_excluida', "Enquete #$id excluída", ['id' => $id], null, true);
                 flash('Enquete excluída.');
                 header('Location: ./');
                 exit;
         }
     } catch (PDOException $ex) {
+        logar('erro', 'painel', 'painel_erro_banco', $ex->getMessage(), ['acao' => $acao, 'id' => $id], null, true, 500);
         flash('Erro no banco: ' . $ex->getMessage(), 'erro');
         header('Location: ./');
         exit;
@@ -165,7 +171,9 @@ while (count($opcoesForm) < 2) {
   <header class="topbar adm-topbar">
     <a class="brand" href="./"><span>🗳️ Painel <b>Enquetes</b></span></a>
     <nav>
-      <?php if ($logado): ?><a href="frases">💬 Frases</a><?php endif; ?>
+      <?php if ($logado): ?><a href="frases">💬 Frases</a> <a href="pedidos">💰 Pagamentos</a>
+      <a href="logs">📜 Logs</a>
+      <a href="atualizar">🚀 Atualizar</a><?php endif; ?>
       <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
       <a href="../<?= e(url('pote', ['lado' => 'direita'])) ?>" target="_blank">🫒 Ver Direita</a>
     </nav>

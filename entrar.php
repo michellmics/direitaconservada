@@ -7,6 +7,7 @@
 // Parâmetros no ?c=… cifrado (lado, r = para onde voltar, token): ver includes/rotas.php.
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/includes/auth.php';
+require __DIR__ . '/includes/limite.php';
 
 $P = rota_params(['lado', 'r', 'token']); // links antigos (?token=…) de e-mails já enviados continuam valendo
 $S = side($P['lado'] ?? $_POST['lado'] ?? 'direita');
@@ -21,6 +22,8 @@ try {
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_publico_ok($_POST['csrf'] ?? null)) {
       $erro = 'A página ficou aberta tempo demais. Tente de novo.';
+    } elseif (!limite_ok('entrar', 10)) { // rate limit por IP: cada pedido manda um e-mail
+      $erro = 'Muitas tentativas seguidas. Espere um minuto e tente de novo.';
     } elseif (($_POST['acao'] ?? '') === 'pedir') {
       $email = mb_strtolower(trim((string) ($_POST['email'] ?? '')));
       $nome  = trim((string) ($_POST['nome'] ?? ''));
@@ -60,7 +63,7 @@ try {
     $tela = 'logado';
   }
 } catch (PDOException $ex) {
-  error_log('[login] ' . $ex->getMessage());
+  logar('erro', 'sistema', 'erro_tratado', 'login: ' . $ex->getMessage(), [], null, false, 500);
   $erro = 'O login está indisponível agora. Tente de novo em instantes.';
 }
 
@@ -112,7 +115,7 @@ require __DIR__ . '/includes/header.php';
         <label class="field"><span>E-mail</span>
           <input type="email" name="email" required maxlength="190" autocomplete="email" autofocus value="<?= e($email) ?>" placeholder="voce@exemplo.com">
         </label>
-        <label class="field"><span>Seu nome <small>(só na primeira vez)</small></span>
+        <label class="field"><span>Seu nome</span>
           <input name="nome" maxlength="60" autocomplete="name" value="<?= e($_POST['nome'] ?? '') ?>" placeholder="Como quer aparecer no site">
         </label>
         <button class="btn btn-gold btn-block">Receber link de acesso</button>

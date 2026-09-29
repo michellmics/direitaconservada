@@ -42,20 +42,14 @@ function mock_phrases(string $side): array
     ];
 }
 
-// Itens e comentários do site: do banco (includes/banco_dados.php); se o banco estiver fora do ar
-// ou vazio, os gerados aqui embaixo. Para popular o banco: php database/seed.php
+// Itens e comentários do site: sempre do banco (includes/banco_dados.php). Banco vazio = pote vazio.
+// Os gerados aqui embaixo (mock_*_gerados) só servem para popular um banco de desenvolvimento: php database/seed.php
 require_once dirname(__DIR__) . '/includes/banco_dados.php';
 
 function mock_items(string $side): array
 {
     static $cache = [];
-    return $cache[$side] ??= banco_itens($side) ?? mock_items_gerados($side);
-}
-
-function mock_comments(string $side, array $items): array
-{
-    static $cache = [];
-    return $cache[$side] ??= banco_comentarios($side) ?? mock_comments_gerados($side, $items);
+    return $cache[$side] ??= banco_itens($side) ?? [];
 }
 
 function mock_items_gerados(string $side): array
@@ -232,62 +226,4 @@ function mock_comments_gerados(string $side, array $items): array
     unset($c);
     return $out;
 }
-
-// Mapa da guerra dos potes: itens no pote (não vencidos) por estado, dos dois lados → [lado => [UF => n]]
-// Com o banco: SELECT lado, uf, COUNT(*) FROM itens WHERE status = 'ativo' GROUP BY lado, uf
-function contagem_por_uf(): array
-{
-    $hoje = date('Y-m-d');
-    $out = [];
-    foreach (array_keys(SIDES) as $lado) {
-        $out[$lado] = [];
-        foreach (mock_items($lado) as $o) {
-            if ($o['valido_ate'] >= $hoje) {
-                $out[$lado][$o['uf']] = ($out[$lado][$o['uf']] ?? 0) + 1;
-            }
-        }
-    }
-    return $out;
-}
-
-// Quem manda em cada estado: por pote, as 2 pessoas com mais valor (R$) em itens ativos ali — item mais caro pesa mais.
-// → [lado => [UF => [['dono','id','nome','foto','tipo','selo','valor' (centavos),'itens' => [tipo => qtd]], …]]]
-// (2 bastam para saber se há empate no topo.) Com o banco: SUM(item_tipos.preco_centavos) GROUP BY lado, uf, usuario_id.
-function reis_por_uf(int $top = 2): array
-{
-    $hoje = date('Y-m-d');
-    $out = [];
-    foreach (array_keys(SIDES) as $lado) {
-        $pessoas = [];
-        foreach (mock_items($lado) as $o) {
-            if ($o['valido_ate'] < $hoje) {
-                continue;
-            }
-            $p = &$pessoas[$o['uf']][$o['dono']];
-            // nome/foto/perfil do 1º item da pessoa (o "dono")
-            $cara = array_intersect_key($o, array_flip(['nome', 'foto', 'tipo', 'selo']));
-            $p ??= ['dono' => $o['dono'], 'id' => $o['id'], 'valor' => 0, 'itens' => []] + $cara;
-            if ($o['id'] === $o['dono']) {
-                $p = array_merge($p, $cara, ['id' => $o['id']]);
-            }
-            $p['valor'] += (int) round(SIDES[$lado]['types'][$o['tipo']]['price'] * 100);
-            $p['itens'][$o['tipo']] = ($p['itens'][$o['tipo']] ?? 0) + 1;
-            unset($p);
-        }
-        foreach ($pessoas as $uf => $lista) {
-            usort($lista, fn($a, $b) => $b['valor'] <=> $a['valor']);
-            $out[$lado][$uf] = array_slice($lista, 0, $top);
-        }
-    }
-    return $out;
-}
-
-function ranking_uf(array $items, int $limit = 8): array
-{
-    $count = [];
-    foreach ($items as $o) {
-        $count[$o['uf']] = ($count[$o['uf']] ?? 0) + 1;
-    }
-    arsort($count);
-    return array_slice($count, 0, $limit, true);
-}
+// Contas do pote (contagem por estado, quem manda, ranking): SQL direto em includes/pote_js.php

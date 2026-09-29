@@ -37,56 +37,30 @@ if (!str_contains(strtolower($version), 'mariadb') && version_compare($version, 
 
 $pdo->exec("CREATE DATABASE IF NOT EXISTS `$name` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 $pdo->exec("USE `$name`");
-$pdo->exec('CREATE TABLE IF NOT EXISTS migrations (
-    arquivo    VARCHAR(190) NOT NULL PRIMARY KEY,
-    rodado_em  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
-
-$done  = $pdo->query('SELECT arquivo FROM migrations')->fetchAll(PDO::FETCH_COLUMN);
-$files = glob(__DIR__ . '/migrations/*.sql');
-sort($files);
+require_once dirname(__DIR__) . '/includes/migracoes.php'; // a mesma lógica do botão "Atualizar sistema" do painel
 
 echo "MySQL $version · banco `$name`\n";
 
-$pending = array_filter($files, fn($f) => !in_array(basename($f), $done, true));
-
 if (in_array('--status', $argv, true)) {
-    foreach ($files as $f) {
-        echo (in_array(basename($f), $done, true) ? '  [ok]       ' : '  [pendente] ') . basename($f) . "\n";
+    migracoes_tabela($pdo);
+    $pendentes = array_map('basename', migracoes_pendentes($pdo));
+    $arquivos = glob(__DIR__ . '/migrations/*.sql');
+    sort($arquivos);
+    foreach ($arquivos as $f) {
+        echo (in_array(basename($f), $pendentes, true) ? '  [pendente] ' : '  [ok]       ') . basename($f) . "\n";
     }
     exit;
 }
 
-if (!$pending) {
+if (!migracoes_pendentes($pdo)) {
     exit("Nada a fazer: tudo em dia.\n");
 }
-
-foreach ($pending as $file) {
-    $sql = file_get_contents($file);
-    echo '→ ' . basename($file) . ' … ';
-    try {
-        // Obs.: CREATE TABLE no MySQL confirma a transação sozinho; se falhar no meio,
-        // apague as tabelas criadas (ou o banco) antes de rodar de novo.
-        foreach (split_sql($sql) as $statement) {
-            $pdo->exec($statement);
-        }
-        $pdo->prepare('INSERT INTO migrations (arquivo) VALUES (?)')->execute([basename($file)]);
-        echo "ok\n";
-    } catch (PDOException $e) {
-        echo "ERRO\n{$e->getMessage()}\n";
-        exit(1);
-    }
+$r = migracoes_aplicar($pdo);
+foreach ($r['aplicadas'] as $nome) {
+    echo "→ $nome … ok\n";
 }
-
+if ($r['erro']) {
+    echo "ERRO\n{$r['erro']}\n";
+    exit(1);
+}
 echo "Pronto.\n";
-
-// Divide o arquivo em comandos pelo ";" no fim da linha, ignorando comentários "--".
-function split_sql(string $sql): array
-{
-    $lines = array_filter(
-        preg_split('/\R/', $sql),
-        fn($l) => !preg_match('/^\s*--/', $l)
-    );
-    $parts = preg_split('/;\s*$/m', implode("\n", $lines));
-    return array_values(array_filter(array_map('trim', $parts), fn($s) => $s !== ''));
-}

@@ -4,7 +4,7 @@
     <h1><?= $S['h1'] ?></h1>
     <p><?= str_replace('{preco}', money(min_price($S)), $S['lead']) ?></p>
     <div class="stats">
-      <div><strong id="stat-total"><?= num(count($items)) ?></strong><span><?= e($S['items']) ?> no pote</span></div>
+      <div><strong id="stat-total"><?= num($totais['total']) ?></strong><span><?= e($S['items']) ?> no pote</span></div>
       <div><strong id="stat-hoje"><?= num($hoje) ?></strong><span>entraram hoje</span></div>
       <div><strong><?= e((string) array_key_first($ranking)) ?></strong><span><?= e($S['stat_uf']) ?></span></div>
     </div>
@@ -19,8 +19,7 @@
     require __DIR__ . '/jar.php'; ?>
     <div class="olive-tip" id="olive-tip" hidden></div>
     <p class="jar-capacity">
-      <span class="jar-meter"><i id="jar-meter" style="width: <?= max(0.5, count($items) / JAR_CAPACITY * 100) ?>%"></i></span>
-      <span><b id="jar-count"><?= num(count($items)) ?></b> de <?= num(JAR_CAPACITY) ?> lugares ocupados</span>
+      <span class="jar-meter"><i id="jar-meter" style="width: <?= max(0.5, $totais['total'] / JAR_CAPACITY * 100) ?>%"></i></span>
     </p>
   </div>
 </section>

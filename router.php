@@ -4,7 +4,7 @@
 //   php -S localhost:8080 router.php
 //
 //   /             → index.php        /pote?c=…    → pote.php
-//   /admin/       → admin/index.php  /api/nivel   → api/nivel.php
+//   /cozinha/     → cozinha/index.php (painel)  /api/nivel   → api/nivel.php
 //   /pote.php?…   → redireciona para /pote?…
 // Pastas internas (includes, data, database, partials, vendor) e arquivos ocultos (.env) não são servidos.
 $raiz = __DIR__;
@@ -18,7 +18,8 @@ $naoEncontrado = function () {
     return true;
 };
 
-if (str_contains($caminho, '..') || preg_match('#^/(includes|data|database|partials|vendor)(/|$)|/\.|^/router\.php$#i', $caminho)) {
+if (str_contains($caminho, '..') || preg_match('#^/(includes|data|database|partials|vendor)(/|$)|/\.|^/router\.php$|^/(README\.md|composer\.(json|lock))$#i', $caminho)
+    || (preg_match('#^/uploads(/|$)#i', $caminho) && !preg_match('#^/uploads/pedidos/[a-f0-9]{24}\.(jpg|png)$#', $caminho))) { // uploads: só imagem
     return $naoEncontrado();
 }
 
@@ -44,7 +45,7 @@ if (preg_match('#^(.*?)(/index)?\.php$#', $caminho, $m) && is_file($raiz . $cami
     readfile($raiz . $caminho);
     return true;
 } elseif (is_dir($raiz . $caminho) && !str_ends_with($caminho, '/')) {
-    header('Location: ' . $caminho . '/' . ($query !== '' ? '?' . $query : ''), true, 301); // /admin → /admin/
+    header('Location: ' . $caminho . '/' . ($query !== '' ? '?' . $query : ''), true, 301); // /cozinha → /cozinha/
     return true;
 } else {
     $script = str_ends_with($caminho, '/') ? $caminho . 'index.php' : $caminho . '.php';

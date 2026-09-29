@@ -1,5 +1,5 @@
 <?php
-// Frases engraçadas espalhadas pelo site (tabela frases, migration 006; edite em /admin/frases.php).
+// Frases engraçadas espalhadas pelo site (tabela frases, migration 006; edite em /cozinha/frases).
 // Sorteadas a cada visita. Sem banco, o site segue normal, só sem as frases.
 require_once __DIR__ . '/db.php';
 

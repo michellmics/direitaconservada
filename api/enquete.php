@@ -8,6 +8,7 @@ header('Cache-Control: no-store');
 
 function responder(array $dados, int $status = 200): never
 {
+    log_api(basename(__FILE__, '.php'), $dados, $status); // tudo o que a API responde vai para o log
     http_response_code($status);
     echo json_encode($dados, JSON_UNESCAPED_UNICODE);
     exit;
@@ -23,6 +24,10 @@ if ($origin !== '' && parse_url($origin, PHP_URL_HOST) !== parse_url('//' . ($_S
 }
 
 $in = json_decode(file_get_contents('php://input'), true);
+// rate limit por IP (includes/limite.php): geral das APIs + desta ação, por minuto
+require_once dirname(__DIR__) . '/includes/limite.php';
+limite_api('api', 150);
+limite_api('enquete', 20);
 $enqueteId = (int) ($in['enquete'] ?? 0);
 $opcaoId   = (int) ($in['opcao'] ?? 0);
 $lado      = (string) ($in['lado'] ?? '');

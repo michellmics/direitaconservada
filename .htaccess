@@ -1,5 +1,5 @@
 # Rotas sem ".php" (Apache / LiteSpeed, ex.: Hostinger). No "php -S", quem faz isso é o router.php.
-#   /pote?c=…  → pote.php      /admin/frases → admin/frases.php      /pote.php?… → redireciona para /pote?…
+#   /pote?c=…  → pote.php      /cozinha/frases → cozinha/frases.php      /pote.php?… → redireciona para /pote?…
 Options -MultiViews -Indexes
 DirectoryIndex index.php
 
@@ -10,6 +10,10 @@ RewriteEngine On
 RewriteRule ^(includes|data|database|partials|vendor)(/|$) - [R=404,L]
 RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
 RewriteRule ^router\.php$ - [R=404,L]
+# documentação e dependências não são públicas (o README descreve o painel e as tabelas)
+RewriteRule ^(README\.md|composer\.(json|lock))$ - [R=404,L]
+# fotos e selos enviados nas compras: só imagem (nada de script)
+RewriteRule ^uploads/(?!pedidos/[a-f0-9]{24}\.(jpg|png)$) - [R=404,L]
 
 # quem pede ".php" vai para a rota sem a extensão (só GET; mantém o ?c=…)
 RewriteCond %{REQUEST_METHOD} =GET
@@ -21,3 +25,8 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.+?)/?$ $1.php [L]
 </IfModule>
+
+# Segunda barreira (vale mesmo sem mod_rewrite): .env, documentação e composer nunca são entregues
+<FilesMatch "^(\.env.*|README\.md|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>

@@ -5,7 +5,8 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const SVG = 'http://www.w3.org/2000/svg';
 
-  // ---------- armazenamento local (simula o banco enquanto ele não existe) ----------
+  // ---------- armazenamento local: só conveniências do navegador (ex.: partidos escolhidos antes de entrar) ----------
+  // Os dados de verdade (itens, posts, comentários, curtidas, pedidos) vêm do banco, em DC.
   const store = {
     get(key, fallback) {
       try { return JSON.parse(localStorage.getItem('dc_' + key)) ?? fallback; } catch { return fallback; }
@@ -20,15 +21,15 @@
   const S = DC.sides[SIDE];
   const OTHER = DC.sides[S.other];
 
-  const mine = store.get(`${SIDE}_mine`, []);      // itens comprados neste navegador, neste pote
-  const myPosts = store.get(`${SIDE}_posts`, []);  // posts do mural publicados neste navegador
-  const liked = new Set(store.get('likes', []));
-  const myComments = store.get('comments', []);  // comentários feitos neste navegador (qualquer pote)
-  // id de cada comentário deste navegador (para citar e apagar); os antigos ganham um agora
-  if (myComments.some((c) => !c.id)) {
-    myComments.forEach((c, i) => { c.id ??= `l${Date.now()}-${i}`; });
-    store.set('comments', myComments);
-  }
+  // ---------- a conta de quem está vendo (do banco, em DC; vazia para visitante) ----------
+  // DC.meus: itens da pessoa nos dois potes — "pendente" = Pix em conferência no painel: só ela vê, até aprovar.
+  // O que ela faz nesta visita (comprar, publicar, comentar, curtir) é salvo no servidor e entra nestas listas.
+  const meusDe = (side) => ((DC.meus ||= {})[side] ||= []);
+  const mine = meusDe(SIDE);                       // itens da pessoa neste pote
+  const myPosts = [];                              // publicados nesta visita (na próxima, vêm no mural do servidor)
+  const curtidasIniciais = new Set(DC.curtidas || []); // já contadas nos números que vêm do servidor
+  const liked = new Set(curtidasIniciais);
+  const myComments = [];                           // feitos nesta visita (já salvos no servidor)
   // apagado continua na lista (aparece "comentário apagado"), mas não conta para nada
   const comentariosAtivos = () => myComments.filter((c) => !c.apagado);
 
@@ -42,15 +43,23 @@
       .join(' ');
   }
 
-  const olives = [...DC.items, ...mine];
+  // os itens da pessoa também vêm no pote público (os ativos): fica a versão da conta, na ordem dos números
+  const meusIds = new Set(mine.map((o) => o.id));
+  // presentes que a pessoa deu: os pendentes (pagamento em conferência) só ela vê, então vêm da conta
+  const presentesAqui = (DC.presentes || []).filter((o) => o.side === SIDE && o.pendente);
+  const olives = [...DC.items.filter((o) => !meusIds.has(o.id) && !presentesAqui.some((p) => p.id === o.id)), ...mine, ...presentesAqui]
+    .sort((a, b) => a.id - b.id);
   // nome e cidade sempre com só as iniciais maiúsculas: "SÃO PAULO" / "são paulo" → "São Paulo"
   olives.forEach((o) => { o.nome = nomeProprio(o.nome); o.cidade = nomeProprio(o.cidade); });
-  myComments.forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
   const byId = (id) => olives.find((o) => o.id === id);
+  // o perfil é da PESSOA: todas as azeitonas dela neste pote ("dono" = 1ª azeitona dela; presente não resgatado é à parte)
+  const chavePessoa = (o) => (meusIds.has(o.id) ? 'eu' : o.dono ?? o.id);
+  const itensDaPessoa = (o) => olives.filter((x) => chavePessoa(x) === chavePessoa(o)).sort((a, b) => a.id - b.id);
+  const naPaginaDePerfil = (o) => !!DC.profileId && !!byId(DC.profileId) && chavePessoa(o) === chavePessoa(byId(DC.profileId));
 
   // Quem está comentando: o item comprado mais recente, em qualquer um dos potes
   function me() {
-    const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ ...o, side: s, nome: nomeProprio(o.nome) })));
+    const all = Object.keys(DC.sides).flatMap((s) => meusDe(s).map((o) => ({ ...o, side: s, nome: nomeProprio(o.nome) })));
     return all.sort((a, b) => (b.criado || 0) - (a.criado || 0))[0] || null;
   }
 
@@ -66,7 +75,7 @@
   const rand = (seed) => { const x = Math.sin(seed * 9301 + 49297) * 233280; return x - Math.floor(x); };
   // Links de perfil já cifrados pelo servidor (DC.links; a chave não vem para o navegador).
   // Os das compras feitas neste navegador vêm de /api/link e ficam guardados (garantirLinksLocais).
-  const linksLocais = store.get('links', {});
+  const linksLocais = {}; // links das compras feitas nesta visita (o servidor gera; ver garantirLinksLocais)
   const linkPerfilExato = (side, id) => DC.links?.perfil?.[side]?.[id] || linksLocais[`${side}:${id}`] || null;
   const profileUrl = (side, id) => linkPerfilExato(side, id) || DC.links?.pote?.[side] || './'; // sem link: vai para o pote
   const poteUrl = (side) => DC.links?.pote?.[side] || './';
@@ -105,8 +114,8 @@
     ? `<img class="${cls} avatar-photo" src="${esc(o.foto)}" alt="Foto de ${esc(o.nome)}" data-fallback-class="${esc(initialsClass(o, cls))}" data-initials="${esc(initials(o.nome))}">`
     : initialsAvatar(o, cls);
 
-  // Selo: 'br' (bandeira do Brasil), um emoji ou uma imagem enviada (data:...)
-  const isImageSelo = (s) => /^(data:image\/|https?:\/\/)/.test(s);
+  // Selo: 'br' (bandeira do Brasil), um emoji ou uma imagem enviada (data:... no navegador, uploads/... no servidor)
+  const isImageSelo = (s) => /^(data:image\/|https?:\/\/|uploads\/)/.test(s);
   function seloHtml(selo) {
     if (selo === 'br') return '<svg viewBox="-10 -10 20 20"><use href="#selo-br" x="-10" y="-10" width="20" height="20"/></svg>';
     if (isImageSelo(selo)) return `<img src="${esc(selo)}" alt="">`;
@@ -170,11 +179,15 @@
     return pos;
   }
 
+  // .agito = chacoalhão (pote-agito.js mexe nele) · .flutua = boiando devagar (CSS), cada um no seu ritmo
   function oliveInner(o) {
-    return `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
+    const ritmo = `--fd:${(4 + rand(o.id * 13) * 3).toFixed(2)}s;--fa:-${(rand(o.id * 17) * 6).toFixed(2)}s`;
+    return `<g class="agito"><g class="flutua" style="${ritmo}">` +
+      `<g transform="rotate(${olivePosition(slotOf(o)).r.toFixed(0)})">${S.shapes[o.tipo] || ''}</g>` +
       (o.selo ? seloSvg(o.selo) : '') +
       // selo de play (fora da rotação, para o triângulo ficar sempre de pé)
-      (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '');
+      (videoOf(o) ? '<g class="olive-play" transform="translate(9 -7)"><circle r="5.5"/><path d="M-1.8 -2.8 L3 0 L-1.8 2.8 Z"/></g>' : '') +
+      '</g></g>';
   }
 
   // vídeo mais recente que a pessoa postou (ou o da própria azeitona)
@@ -240,7 +253,7 @@
       tip.innerHTML =
         `<div class="tip-head">${avatarWithSelo(o, 'tip-photo')}<div><b>${esc(o.nome)}${nivelTag(SIDE, o.id)}</b><small>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.cidade)}/${esc(o.uf)}<br>desde ${fmtDate(o.desde)} · ${tempoTexto(o)}</small>${provocadorTag(o.id)}</div></div>` +
         `<q>${esc(o.frase)}</q>` +
-        (DC.profileId === o.id ? '' : `<a class="tip-profile" href="${profileUrl(SIDE, o.id)}">Ver perfil →</a>`) +
+        (naPaginaDePerfil(o) ? '' : `<a class="tip-profile" href="${profileUrl(SIDE, o.id)}">Ver perfil →</a>`) +
         (v ? `<div class="tip-video">${videoCoverHtml(v)}</div>` : '');
       tip.classList.toggle('has-video', !!v);
       tip.classList.remove('is-playing');
@@ -324,20 +337,25 @@
     jar.addEventListener('click', (e) => {
       const el = e.target.closest('.olive');
       if (!el) { if (isTouch) close(); return; }
-      // no toque: primeiro toque mostra o balão, segundo abre o certificado
+      // no toque: primeiro toque mostra o balão, segundo vai para o perfil da pessoa
       if (isTouch && active !== el) { show(el); return; }
       if (playing) close();
-      openCert(byId(Number(el.dataset.id)));
+      const o = byId(Number(el.dataset.id));
+      if (o && !naPaginaDePerfil(o)) location.href = profileUrl(SIDE, o.id);
     });
   }
 
   function updateStats() {
     const set = (sel, v) => { const el = $(sel); if (el) el.textContent = v.toLocaleString('pt-BR'); };
-    set('#stat-total', noPote().length);
-    set('#stat-hoje', noPote().filter((o) => o.desde === todayIso()).length);
-    set('#jar-count', noPote().length);
+    // o total vem do servidor (o navegador só tem o vidro); soma as compras pendentes da pessoa, que só ela vê
+    const pendentes = olives.filter((o) => o.pendente && !vencido(o));
+    const total = (DC.total ?? noPote().length) + (DC.total != null ? pendentes.length : 0);
+    const hoje = (DC.hoje ?? 0) + pendentes.filter((o) => o.desde === todayIso()).length;
+    set('#stat-total', total);
+    set('#stat-hoje', hoje);
+    set('#jar-count', total);
     const meter = $('#jar-meter');
-    if (meter) meter.style.width = Math.max(0.5, (noPote().length / DC.capacity) * 100) + '%';
+    if (meter) meter.style.width = Math.max(0.5, (total / DC.capacity) * 100) + '%';
   }
 
   // ---------- modais ----------
@@ -348,6 +366,7 @@
     return m;
   }
   function closeModals() {
+    if (compraFeita) aplicarCompra(false); // gerou o Pix e fechou sem "Já paguei": a compra aparece mesmo assim
     $$('.modal').forEach((m) => { m.hidden = true; });
     document.body.style.overflow = '';
     if (location.hash.startsWith(`#${S.item}-`)) history.replaceState(null, '', location.pathname + location.search);
@@ -384,12 +403,13 @@
       <a class="btn btn-ghost" href="${fb}" target="_blank" rel="noopener">Facebook</a>
       <button class="btn btn-ghost" data-copy="${esc(url)}">Copiar link</button>
       <button class="btn btn-ghost wide" data-download="${o.id}">Baixar imagem (Stories / Status)</button>
-      ${DC.profileId === o.id ? '' : `<a class="btn btn-ghost wide" href="${profileUrl(SIDE, o.id)}">Ver perfil</a>`}
+      ${naPaginaDePerfil(o) ? '' : `<a class="btn btn-ghost wide" href="${profileUrl(SIDE, o.id)}">Ver perfil</a>`}
       ${navigator.share ? `<button class="btn btn-link wide" data-native-share="${o.id}">Mais opções…</button>` : ''}`;
   }
 
+  // o certificado é só da dona: ela vê (e compartilha) no próprio perfil
   function openCert(o) {
-    if (!o) return;
+    if (!o || !meusIds.has(o.id)) return;
     $('#cert-view').innerHTML = certHtml(o);
     $('#share-view').innerHTML = shareButtons(o);
     openModal('#cert-modal');
@@ -471,7 +491,7 @@
     g.textAlign = 'center'; g.fillStyle = '#f4ecd8'; g.font = '600 40px Inter, sans-serif';
     g.fillText(`Garanta sua ${S.item} no pote`, W / 2, H - 230);
     g.fillStyle = T['gold-2']; g.font = '800 48px Inter, sans-serif';
-    g.fillText(location.host || 'direitaconservada.com.br', W / 2, H - 160);
+    g.fillText(location.host || 'potepolitico.com.br', W / 2, H - 160);
 
     const a = document.createElement('a');
     a.download = `${S.slug}-${o.id}.png`;
@@ -552,8 +572,9 @@
     if (!e.target.closest('[data-open-buy]')) return;
     goStep(1);
     openModal('#buy-modal');
+    if (!cart.length) usarCadastro(); // quem já comprou não preenche de novo
     updateTotal(); // mostra o aviso de nível já na abertura
-    buyForm.elements.nome.focus();
+    if (!usandoCadastro) buyForm.elements.nome.focus();
   });
   // ---------- carrinho: várias azeitonas/pimentas na mesma compra ----------
   const cart = []; // itens já adicionados: { tipo, nome, cidade, uf, frase, foto, selo, qtd }
@@ -562,8 +583,11 @@
 
   const qtyValue = () => Math.min(QTY_MAX, Math.max(1, parseInt(qtyInput.value, 10) || 1));
   const entryPrice = (en) => S.types[en.tipo].price * en.qtd;
-  // o formulário conta como item quando a pessoa começou a preencher (ou quando o carrinho está vazio)
-  const formStarted = () => !!(buyForm.elements.nome.value.trim() || buyForm.elements.frase.value.trim());
+  // o formulário conta como item quando a pessoa começou a preencher (ou quando o carrinho está vazio).
+  // Com o cadastro, os campos já vêm preenchidos: depois de "Adicionar outra" só conta se mexer no tipo ou na quantidade.
+  const formStarted = () => (usandoCadastro
+    ? !cadastroIntocado
+    : !!(buyForm.elements.nome.value.trim() || buyForm.elements.frase.value.trim()));
   const formCounts = () => formStarted() || !cart.length;
 
   function readEntry() {
@@ -577,6 +601,7 @@
       foto: photoData,
       selo: f.get('selo') === 'custom' ? seloData : f.get('selo') || null,
       qtd: qtyValue(),
+      presente: !!buyForm.elements.presente?.checked, // 🎁: depois do pagamento, vira um link para entregar
     };
   }
 
@@ -589,7 +614,7 @@
     $('#cart').hidden = !cart.length;
     $('#cart-list').innerHTML = cart.map((en, i) => `<li>
       ${itemSvg(en.tipo)}
-      <span class="cart-desc"><b>${en.qtd}× ${esc(typeLabel(en.tipo))}</b> · ${esc(en.nome)}</span>
+      <span class="cart-desc"><b>${en.qtd}× ${esc(typeLabel(en.tipo))}</b> · ${en.presente ? '🎁 ' : ''}${esc(en.nome)}</span>
       <span class="cart-price">${money(entryPrice(en))}</span>
       <button type="button" class="cart-remove" data-remove="${i}" aria-label="Remover">×</button>
     </li>`).join('');
@@ -604,6 +629,7 @@
 
   // limpa só o que é do item (mantém cidade, UF e tipo para agilizar o próximo)
   function clearItemFields() {
+    if (buyForm.elements.presente) buyForm.elements.presente.checked = false;
     buyForm.elements.nome.value = '';
     buyForm.elements.frase.value = '';
     qtyInput.value = 1;
@@ -636,12 +662,23 @@
   $('#add-more').addEventListener('click', () => {
     if (!buyForm.reportValidity()) return;
     cart.push(readEntry());
-    clearItemFields();
-    renderCart();
-    toast(`Adicionada ao pedido. Agora preencha a próxima ${S.item}.`);
+    if (usandoCadastro) {
+      // a próxima também sai no cadastro (escolhe outro tipo) ou "Para outra pessoa"
+      qtyInput.value = 1;
+      cadastroIntocado = true;
+      renderCart();
+      toast(`Adicionada ao pedido. Escolha outro tipo para mais uma, ou continue para o pagamento.`, 3500);
+    } else {
+      clearItemFields();
+      renderCart();
+      toast(`Adicionada ao pedido. Agora preencha a próxima ${S.item}.`);
+      buyForm.elements.nome.focus({ preventScroll: true });
+    }
     buyModal.querySelector('.modal-card').scrollTo({ top: 0, behavior: 'smooth' });
-    buyForm.elements.nome.focus({ preventScroll: true });
   });
+  // mexeu no tipo ou na quantidade: a "próxima" do cadastro passa a contar
+  buyForm.addEventListener('change', (e) => { if (e.target.name === 'tipo' || e.target.name === 'qtd') cadastroIntocado = false; }, true);
+  buyModal.addEventListener('click', (e) => { if (e.target.closest('[data-qty]')) cadastroIntocado = false; }, true);
 
   $$('.chip', buyForm).forEach((c) => c.addEventListener('click', () => { buyForm.elements.frase.value = c.dataset.phrase; }));
   $('[data-back]', buyModal).addEventListener('click', () => goStep(1));
@@ -720,6 +757,87 @@
     syncSeloUpload();
   }
 
+  // ---------- cadastro: a compra é o cadastro; na próxima, não preenche de novo ----------
+  // Nome, cidade, UF e foto: da compra mais recente (qualquer pote). Frase e selo: da mais recente neste pote
+  // (frase de azeitona não serve na pimenta); sem compra neste pote, só a frase é pedida.
+  let usandoCadastro = false;
+  let cadastroIntocado = false;
+  function cadastro() {
+    const eu = me();
+    if (!eu) return null;
+    const aqui = [...mine].sort((a, b) => (b.criado || 0) - (a.criado || 0))[0];
+    return { nome: eu.nome, cidade: nomeProprio(eu.cidade), uf: eu.uf, foto: eu.foto || null, frase: aqui?.frase || '', selo: aqui?.selo || null };
+  }
+
+  function preencherCampos(c) {
+    const f = buyForm.elements;
+    if (f.presente) f.presente.checked = false;
+    f.nome.value = c?.nome || '';
+    f.cidade.value = c?.cidade || '';
+    f.uf.value = c?.uf || '';
+    f.frase.value = c?.frase || '';
+    qtyInput.value = 1;
+    resetPhoto();
+    resetSelo();
+    buyForm.querySelector('input[name="selo"][value=""]').checked = true;
+    if (c?.foto) {
+      photoData = c.foto;
+      photoPreview.innerHTML = `<img src="${esc(c.foto)}" alt="">`;
+    }
+    if (c?.selo) {
+      const pronto = $$('input[name="selo"]', buyForm).find((r) => r.value === c.selo && r !== seloCustom);
+      if (pronto) pronto.checked = true;
+      else if (isImageSelo(c.selo)) {
+        seloData = c.selo;
+        seloUpload.innerHTML = `<img src="${esc(c.selo)}" alt="">`;
+        seloCustom.checked = true;
+      }
+      syncSeloUpload();
+    }
+  }
+
+  // modo: cartão do cadastro (campos escondidos) ou campos abertos (preenchidos com o cadastro, ou vazios)
+  function modoCadastro(ligado) {
+    const c = ligado ? cadastro() : null;
+    usandoCadastro = !!c;
+    cadastroIntocado = false;
+    $('#cadastro-card').hidden = !c;
+    $('#buy-campos').hidden = !!c;
+    $('#buy-frase').hidden = !!c?.frase;
+    if (!c) return;
+    const o = { ...c, side: SIDE, tipo: buyForm.elements.tipo.value };
+    $('#cadastro-card').innerHTML = `
+      ${avatarWithSelo(o, 'cadastro-foto')}
+      <div class="cadastro-dados">
+        <small>Seu cadastro</small>
+        <b>${esc(c.nome)}</b>
+        <span>📍 ${esc(c.cidade)}/${esc(c.uf)}</span>
+        ${c.frase ? `<q>${esc(c.frase)}</q>` : ''}
+      </div>
+      <div class="cadastro-acoes">
+        <button class="btn btn-link" type="button" data-cadastro="alterar">Alterar</button>
+        <button class="btn btn-link" type="button" data-cadastro="presente">🎁 É presente</button>
+      </div>`;
+  }
+
+  function usarCadastro() {
+    const c = cadastro();
+    preencherCampos(c);
+    modoCadastro(!!c);
+  }
+
+  $('#cadastro-card').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cadastro]');
+    if (!btn) return;
+    if (btn.dataset.cadastro === 'presente') { // campos vazios para a pessoa que vai ganhar ("alterar" mantém o que já está preenchido)
+      preencherCampos(null);
+      buyForm.elements.presente.checked = true;
+    }
+    modoCadastro(false);
+    updateTotal();
+    buyForm.elements.nome.focus();
+  });
+
   // Continuar: o que está no formulário entra no pedido (se foi preenchido) e vai para o Pix
   buyForm.addEventListener('submit', (e) => {
     e.preventDefault();
@@ -731,39 +849,115 @@
     pending = entries;
     const count = entries.reduce((n, en) => n + en.qtd, 0);
     $('#pix-summary').textContent = `${count} ${count > 1 ? S.items : S.item}`;
-    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(entries.reduce((s, en) => s + entryPrice(en), 0)); });
-    renderFakeQr();
+    $('#buy-pix').innerHTML = pixDadosHtml(entries.reduce((s, en) => s + entryPrice(en), 0));
+    $('[data-back]', buyModal).hidden = false;
     goStep(2);
   });
   $('[data-back]', buyModal).addEventListener('click', updateTotal);
 
-  $('#copy-pix').addEventListener('click', () => toast('Código Pix copiado (de mentirinha)'));
+  // ---------- Pix (sem gateway: o código vai direto para a chave do site; o painel confere e aprova) ----------
+  // DC.pedidos (do banco): { pendentes: [pedidos com o Pix], avisos: [resolvidos desde a última visita], titular }
+  const PED = (DC.pedidos ||= { pendentes: [], avisos: [], titular: null });
 
-  $('#simulate-pay').addEventListener('click', () => {
-    const nivelAntes = meuNivel(SIDE);
-    let nextId = Math.max(...olives.map((x) => x.id)) + 1;
-    const bought = [];
-    pending.forEach((en) => {
-      const { qtd, ...data } = en;
-      for (let k = 0; k < qtd; k++) {
-        // cópias do mesmo item não repetem a frase no mural
-        bought.push({ ...data, id: nextId++, side: SIDE, desde: todayIso(), likes: 0, criado: Date.now() + bought.length, semPost: k > 0 });
+  async function apiPedido(dados) {
+    const res = await fetch('api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.erro || 'Não conseguimos falar com o servidor. Tente de novo.');
+    return json;
+  }
+
+  // antes do código: e-mail (quem não entrou na conta) e o nome do titular da conta que vai pagar
+  function pixDadosHtml(total) {
+    return `<form class="pix-dados">
+      <p class="price">${money(total)}<small>/ano</small></p>
+      ${DC.logado ? '' : `<label class="field"><span>Seu e-mail</span><input type="email" name="email" required maxlength="190" autocomplete="email"></label>
+      <p class="muted small">É a sua conta: com ele você entra de novo, em qualquer aparelho.</p>`}
+      <label class="field"><span>Seu nome completo</span><input name="titular" required minlength="3" maxlength="100" autocomplete="name" value="${esc(PED.titular || '')}"></label>
+      <button class="btn btn-gold btn-block" type="submit">Gerar código Pix</button>
+    </form>`;
+  }
+
+  // o código: QR, copia e cola e o que acontece depois
+  function pixHtml(srv, comBotao) {
+    const sd = DC.sides[srv.lado];
+    return `<div class="pix">
+        <div class="qr qr-real">${srv.qr}</div>
+        <div>
+          <p class="price">${money(srv.total)}</p>
+          <p class="muted small">Pedido <b>${esc(srv.codigo)}</b> · pague <b>exatamente este valor</b>, pela conta de <b>${esc(srv.titular)}</b>.</p>
+          <button class="btn btn-ghost btn-sm" type="button" data-copiar-pix>Copiar código Pix</button>
+        </div>
+      </div>
+      <label class="field pix-code"><span>Pix copia e cola</span><textarea readonly rows="3">${esc(srv.copiaCola)}</textarea></label>
+      <p class="pix-aviso">Conferimos o pagamento em poucos minutos.${comBotao ? ` Sua ${esc(sd.item)} já está no pote para você; para os outros, aparece assim que confirmarmos.` : ''} Se o pagamento não for encontrado, o pedido é cancelado.</p>
+      ${comBotao ? '<button class="btn btn-gold btn-block" type="button" data-ja-paguei>Já paguei</button>' : ''}`;
+  }
+
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-copiar-pix]');
+    if (!btn) return;
+    const area = btn.closest('.pix-area').querySelector('.pix-code textarea');
+    try { await navigator.clipboard.writeText(area.value); } catch { area.select(); document.execCommand('copy'); }
+    toast('Código Pix copiado! Cole no app do seu banco, em Pix copia e cola.');
+  });
+
+  // envia o pedido. E-mail novo: a conta nasce e a pessoa já entra. E-mail que já tem conta: vai o link de acesso.
+  async function gerarPix(form, dados) {
+    const btn = form.querySelector('[type="submit"]');
+    const f = new FormData(form);
+    const titular = nomeProprio(f.get('titular'));
+    const email = (f.get('email') || '').trim();
+    btn.disabled = true;
+    btn.textContent = 'Gerando…';
+    try {
+      const r = await apiPedido({ acao: 'criar', lado: SIDE, titular, email: email || undefined, ...dados });
+      if (r.login) { // o carrinho continua aqui: depois de entrar pelo link, é só continuar
+        form.innerHTML = `<p class="pix-aviso">📧 ${esc(r.login)}</p>`;
+        return null;
       }
-    });
-    bought.forEach((o, k) => {
-      olives.push(o);
-      mine.push(o);
-      setTimeout(() => dropOlive(o), k * 160); // caem uma após a outra
-    });
-    store.set(`${SIDE}_mine`, mine);
-    limparTempero();
-    const nivelNovo = meuNivel(SIDE);
-    const nv = nivelNovo > nivelAntes ? nivelInfo(SIDE, nivelNovo) : null;
-    $('#nivel-up').hidden = !nv;
-    if (nv) {
-      avisarPorEmail(SIDE);
-      $('#nivel-up').innerHTML = `<span class="nivel-up-icone">${nv.icone}</span><span>${nivelAntes ? 'Você subiu para o' : 'Você entrou no'} nível <b>${esc(nv.nome)}</b>!<small>Seu nome agora aparece assim no pote, no mural e nos comentários.</small></span>`;
+      if (r.entrou) DC.logado = true;
+      PED.titular = titular;
+      PED.pendentes.push(r.pedido);
+      renderPedidosPendentes();
+      return r;
+    } catch (err) {
+      toast(err.message, 5000);
+      btn.disabled = false;
+      btn.textContent = 'Gerar código Pix';
+      return null;
     }
+  }
+
+  // a compra já está no banco (itens pendentes): aparece no "Já paguei" ou, se a pessoa fechar antes, sem animação
+  let compraFeita = null;
+  $('#buy-pix').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const r = await gerarPix(e.target, { itens: pending });
+    if (!r) return;
+    compraFeita = r.itens;
+    $('[data-back]', buyModal).hidden = true; // o pedido já existe: voltar criaria outro
+    $('#buy-pix').innerHTML = pixHtml(r.pedido, true);
+    resetCart();
+  });
+
+  function aplicarCompra(animar) {
+    const bought = compraFeita || [];
+    compraFeita = null;
+    const nivelAntes = meuNivel(SIDE);
+    bought.forEach((o, k) => {
+      Object.assign(o, { nome: nomeProprio(o.nome), cidade: nomeProprio(o.cidade), novo: true, side: SIDE });
+      olives.push(o);
+      if (o.presente) {
+        (DC.presentes ||= []).push(o); // 🎁 é de outra pessoa: vai para "Presentes para entregar"
+      } else {
+        mine.push(o);
+        meusIds.add(o.id);
+      }
+      if (animar) setTimeout(() => dropOlive(o), k * 160); // caem uma após a outra
+    });
+    renderPedidosPendentes();
+    if (!animar && $('#jar')) renderJar();
+    limparTempero();
     updateStats();
     renderFeed();
     updateComposer();
@@ -771,7 +965,20 @@
     renderNewest();
     renderMapa(); // a compra conta no estado da pessoa
     garantirLinksLocais(); // link cifrado do perfil das novas
+    return { bought, nivelAntes };
+  }
 
+  // "Já paguei": a compra aparece para a pessoa (só para ela) enquanto o painel confere
+  $('#buy-pix').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-ja-paguei]') || !compraFeita) return;
+    const { bought, nivelAntes } = aplicarCompra(true);
+    if (!bought.length) return;
+    const nivelNovo = meuNivel(SIDE);
+    const nv = nivelNovo > nivelAntes ? nivelInfo(SIDE, nivelNovo) : null;
+    $('#nivel-up').hidden = !nv;
+    if (nv) {
+      $('#nivel-up').innerHTML = `<span class="nivel-up-icone">${nv.icone}</span><span>${nivelAntes ? 'Você subiu para o' : 'Você entrou no'} nível <b>${esc(nv.nome)}</b>!<small>Seu nome agora aparece assim no pote, no mural e nos comentários.</small></span>`;
+    }
     const showCert = (o) => {
       $('#cert-slot').innerHTML = certHtml(o);
       $('#share-buttons').innerHTML = shareButtons(o);
@@ -780,33 +987,76 @@
     const many = bought.length > 1;
     $('#bought-summary').hidden = !many;
     $('#bought-list').hidden = !many;
-    $('#bought-summary').textContent = `${bought.length} ${S.items} entraram no pote. Veja o certificado de cada uma:`;
+    $('#bought-summary').textContent = `${bought.length} ${S.items} no seu pedido. Veja o certificado de cada uma:`;
     $('#bought-list').innerHTML = bought.map((o) => `<li data-id="${o.id}">
       <button type="button">${itemSvg(o.tipo)}<span>${numero(o.id)} · ${esc(typeLabel(o.tipo))} · ${esc(o.nome)}</span></button>
     </li>`).join('');
     $$('#bought-list li').forEach((li) => li.addEventListener('click', () => showCert(byId(Number(li.dataset.id)))));
     showCert(bought[0]);
     goStep(3);
-    resetCart();
   });
 
-  function renderFakeQr(sel = '#qr') {
-    // QR decorativo: 3 "olhos" nos cantos + ruído aleatório
-    const N = 21;
-    const corners = [[0, 0], [0, N - 7], [N - 7, 0]];
-    const cell = (r, c) => {
-      for (const [fr, fc] of corners) {
-        const y = r - fr, x = c - fc;
-        if (y >= -1 && x >= -1 && y <= 7 && x <= 7) {
-          if (y < 0 || x < 0 || y > 6 || x > 6) return false;
-          return y === 0 || y === 6 || x === 0 || x === 6 || (y >= 2 && y <= 4 && x >= 2 && x <= 4);
-        }
-      }
-      return Math.random() > 0.5;
-    };
-    let html = '';
-    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) html += `<i class="${cell(r, c) ? '' : 'o'}"></i>`;
-    $(sel).innerHTML = html;
+  // ---------- pagamentos aguardando confirmação (no pote e no perfil) ----------
+  const descricaoPedido = (p) => (p.renova
+    ? `renovação: ${DC.sides[p.lado].item} ${numero(p.renova)}`
+    : `${qtdItens(p.unidades, DC.sides[p.lado])} no pote ${DC.sides[p.lado].name}`);
+
+  // mensagem do WhatsApp para entregar um presente
+  const textoPresente = (o) => {
+    const sd = DC.sides[o.side];
+    return `Te dei uma ${sd.item} no pote ${sd.name}! ${sd.emoji} Toque para resgatar e ela vai para a sua conta: ${o.link}`;
+  };
+
+  function renderPedidosPendentes() {
+    const box = $('#pedidos-pendentes');
+    if (!box) return;
+    const lista = PED.pendentes;
+    const presentes = DC.presentes || [];
+    box.hidden = !lista.length && !presentes.length;
+    box.innerHTML = (lista.length ? `<div class="pend-box">
+      <h3>⏳ ${lista.length > 1 ? 'Pagamentos aguardando' : 'Pagamento aguardando'} confirmação</h3>
+      <ul>${lista.map((p) => `<li style="${themeVars(DC.sides[p.lado])}">
+        <span><b>${money(p.total)}</b> · ${esc(descricaoPedido(p))}<small>Pedido ${esc(p.codigo)} · titular: ${esc(p.titular)}</small></span>
+        <button class="btn btn-ghost btn-sm" type="button" data-ver-pix="${esc(p.codigo)}">Ver Pix</button>
+      </li>`).join('')}</ul>
+      <p class="muted small">Já pagou? É só aguardar: conferimos em poucos minutos. Ainda não? Toque em <b>Ver Pix</b> e pague pelo app do banco.</p>
+    </div>` : '')
+    + (presentes.length ? `<div class="pend-box">
+      <h3>🎁 ${presentes.length > 1 ? 'Presentes para entregar' : 'Presente para entregar'}</h3>
+      <ul>${presentes.map((o) => `<li style="${themeVars(DC.sides[o.side])}">
+        <span>${itemSvg(o.tipo, o.side)} <b>${esc(nomeProprio(o.nome))}</b> · ${numero(o.id)}
+          <small>${o.link ? 'Mande o link: quem abrir primeiro e tocar em “Resgatar” fica com ela.' : 'O link aparece aqui assim que confirmarmos o pagamento.'}</small></span>
+        ${o.link ? `<span class="pend-acoes">
+          <a class="btn btn-gold btn-sm" href="https://wa.me/?text=${encodeURIComponent(textoPresente(o))}" target="_blank" rel="noopener">WhatsApp</a>
+          <button class="btn btn-ghost btn-sm" type="button" data-copy="${esc(o.link)}">Copiar link</button>
+        </span>` : '<span class="pend-espera">⏳</span>'}
+      </li>`).join('')}</ul>
+    </div>` : '');
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ver-pix]');
+    if (!btn) return;
+    const p = PED.pendentes.find((x) => x.codigo === btn.dataset.verPix);
+    if (!p) return;
+    $('#pix-modal-body').innerHTML = `<p class="muted small">${esc(descricaoPedido(p))}</p>${pixHtml(p, false)}`;
+    openModal('#pix-modal');
+  });
+
+  // o que o painel resolveu desde a última visita (o servidor manda cada aviso uma vez só)
+  function mostrarAvisos() {
+    const aprovadas = {};
+    const outros = [];
+    PED.avisos.forEach((p) => {
+      const sd = DC.sides[p.lado];
+      if (p.status === 'pago' && !p.renova) aprovadas[p.lado] = (aprovadas[p.lado] || 0) + p.unidades;
+      else if (p.status === 'pago') outros.push(`Pagamento confirmado! Renovação da ${sd.item} ${numero(p.renova)} garantida.`);
+      else if (p.status === 'expirado') outros.push(`O pedido ${p.codigo} expirou sem pagamento confirmado.`);
+      else outros.push(`Não encontramos o pagamento do pedido ${p.codigo}. Ele foi cancelado.`);
+    });
+    const compras = Object.entries(aprovadas).map(([lado, n]) => `${qtdItens(n, DC.sides[lado])} no pote ${DC.sides[lado].name}`);
+    if (compras.length) outros.unshift(`Pagamento confirmado! ${compras.join(' e ')}, para todo mundo ver.`);
+    if (outros.length) toast(outros.join(' '), 7000);
   }
 
   // ---------- vídeos (YouTube / TikTok) ----------
@@ -874,19 +1124,22 @@
 
   // ---------- mural ----------
   // Os posts vêm do servidor, 12 por vez: a 1ª página já vem na página (DC.feed) e "Carregar mais" busca
-  // as próximas em /api/posts, na ordem da aba. Os publicados neste navegador aparecem no topo.
+  // as próximas em /api/posts, na ordem da aba. Os publicados nesta visita (já salvos) aparecem no topo.
   let sort = 'recentes';
   const feed = { posts: DC.feed?.posts || [], mais: !!DC.feed?.mais, carregando: false, erro: false, pedido: 0 };
 
-  // posts deste navegador (ainda não estão no servidor): publicados aqui + a frase de quem comprou aqui
+  // posts desta visita (já salvos, mas fora da página que veio do servidor): publicados agora + frases das compras de agora
   function postsLocais() {
-    const frases = mine.filter((o) => !vencido(o) && !o.semPost)
+    const frases = mine.filter((o) => o.novo && o.postado && !vencido(o)) // compradas nesta visita (as outras vêm no mural)
       .map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes || 0, video: o.video || null, isNew: true }));
     let list = [...myPosts.map((p) => ({ ...p, isNew: true })), ...frases];
-    if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
+    if (DC.profileId) list = list.filter((p) => (DC.pessoa || [DC.profileId]).includes(p.oliveId)); // página de perfil: da pessoa
     return list.sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)));
   }
-  const postsNaTela = () => [...postsLocais(), ...feed.posts];
+  const postsNaTela = () => {
+    const locais = postsLocais();
+    return [...locais, ...feed.posts.filter((p) => !locais.some((l) => l.id === p.id))]; // o publicado agora pode vir do servidor
+  };
 
   // busca a próxima página (ou, com reset, a 1ª de novo — ao trocar de aba); respostas atrasadas são ignoradas
   async function carregarPosts(reset = false) {
@@ -903,6 +1156,8 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.erro);
       if (pedido !== feed.pedido) return;
+      receberExtras(data.extras); // autores dos posts novos
+      Object.assign(CONTAGEM, data.contagem || {}); // comentários dos posts novos (o servidor conta só os da página)
       feed.posts = [...feed.posts, ...data.posts.filter((p) => !feed.posts.some((q) => q.id === p.id))];
       feed.mais = data.mais;
     } catch {
@@ -918,12 +1173,13 @@
     const fromOlives = noPote().filter((o) => !o.semPost).map((o) => ({ id: `${SIDE}-o${o.id}`, oliveId: o.id, text: o.frase, date: o.desde, likes: o.likes, video: o.video || null }));
     const extra = myPosts.map((p) => ({ ...p, isNew: true }));
     let list = [...extra, ...fromOlives];
-    if (DC.profileId) list = list.filter((p) => p.oliveId === DC.profileId); // página de perfil
+    if (DC.profileId) list = list.filter((p) => (DC.pessoa || [DC.profileId]).includes(p.oliveId)); // página de perfil: da pessoa
     if (sort === 'top') return list.sort((a, b) => likesOf(b) - likesOf(a));
     if (sort === 'debate') return list.sort((a, b) => totalComentarios(b.id) - totalComentarios(a.id));
     return list.sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
   }
-  const likesOf = (p) => p.likes + (liked.has(p.id) ? 1 : 0);
+  // o número do servidor já inclui a curtida da pessoa (se ela já tinha curtido): só soma a mudança desta visita
+  const likesOf = (p) => p.likes - (curtidasIniciais.has(p.id) ? 1 : 0) + (liked.has(p.id) ? 1 : 0);
 
   // ---------- comentários (os dois lados podem comentar) ----------
   // Os do servidor vêm de /api/comentarios, 10 por vez (os mais recentes; "ver anteriores" busca mais).
@@ -988,8 +1244,24 @@
   const idsCache = new Map();
   const limparTempero = () => { temperoCache.clear(); idsCache.clear(); };
 
+  // O navegador não recebe o pote inteiro: quando o mural ou os comentários trazem gente nova, a API manda junto
+  // o item, o nível e o link do perfil de cada um (extras) — entram aqui.
+  function receberExtras(x) {
+    if (!x) return;
+    (x.itens || []).forEach((o) => {
+      Object.assign(o, { nome: nomeProprio(o.nome), cidade: nomeProprio(o.cidade) });
+      if (o.side === SIDE) { if (!byId(o.id)) olives.push(o); }
+      else if (!(DC.otherItems ||= []).some((y) => y.id === o.id)) DC.otherItems.push(o);
+    });
+    olives.sort((a, b) => a.id - b.id);
+    Object.entries(x.fatos || {}).forEach(([s, f]) => Object.assign(TP.fatos[s] ||= {}, f));
+    Object.entries(x.donos || {}).forEach(([s, d]) => Object.assign(TP.donos[s] ||= {}, d));
+    Object.entries(x.links || {}).forEach(([s, porId]) => Object.entries(porId).forEach(([id, u]) => { linksLocais[`${s}:${id}`] = u; }));
+    limparTempero();
+  }
+
   const idsMeus = (side) => {
-    if (!idsCache.has(side)) idsCache.set(side, new Set(store.get(`${side}_mine`, []).map((x) => x.id)));
+    if (!idsCache.has(side)) idsCache.set(side, new Set(meusDe(side).map((x) => x.id)));
     return idsCache.get(side);
   };
   // "eu" = itens comprados neste navegador; nos de exemplo, o dono é o 1º item da pessoa
@@ -1016,29 +1288,35 @@
     return [...porDia.values()].reduce((a, b) => a + b, 0);
   }
 
-  // post "lado-o42" (frase da compra) ou "lado-p…" (publicado neste navegador) → [lado, dono]
+  // post "lado-o42" (frase da compra) ou "lado-p…" (publicação: desta visita ou do mural carregado) → [lado, dono]
   function donoDoPostEm(postId) {
     const m = postId.match(/^(\w+)-o(\d+)$/);
     if (m) return [m[1], donoDe(m[1], Number(m[2]))];
     const p = postId.match(/^(\w+)-p/);
     if (!p) return [null, null];
-    // publicação: minha (deste navegador) ou de alguém do banco (está no mural carregado)
-    const doBanco = p[1] === SIDE ? feed.posts.find((x) => x.id === postId) : null;
-    return [p[1], doBanco ? donoDe(p[1], doBanco.oliveId) : 'eu'];
+    const achado = (p[1] === SIDE ? [...myPosts, ...feed.posts] : myPosts).find((x) => x.id === postId);
+    return [p[1], achado ? donoDe(p[1], achado.oliveId) : null];
   }
 
-  // fatos de quem comprou neste navegador (semItem: simula o nível sem um dos itens, ex.: se vencer)
+  // fatos da própria pessoa: os do servidor (itens ativos, posts, comentários e curtidas no banco) + o que ainda
+  // não está lá: itens pendentes (Pix em conferência) e o que ela fez nesta visita.
+  // semItem: simula o nível sem um dos itens (ex.: se vencer).
   function fatosMeus(side, semItem = null) {
-    const f = fatosVazios();
-    const itens = store.get(`${side}_mine`, []).filter((o) => !vencido(o) && o.id !== semItem);
-    if (!itens.length) return f;
-    const janela = inicioJanela();
-    const ids = idsMeus(side);
-    itens.forEach((o) => { f.reais += DC.sides[side].types[o.tipo].price; });
+    const meus = meusDe(side);
+    const itens = meus.filter((o) => !vencido(o) && o.id !== semItem);
+    if (!itens.length) return fatosVazios();
+    const ativos = meus.filter((o) => !o.pendente);
+    const dono = ativos.length ? TP.donos[side]?.[ativos[0].id] ?? ativos[0].id : null;
+    const f = { ...fatosVazios(), ...(dono !== null ? TP.fatos[side]?.[dono] : null) };
+    const preco = (o) => DC.sides[side].types[o.tipo].price;
+    meus.filter((o) => o.pendente && !vencido(o) && o.id !== semItem).forEach((o) => { f.reais += preco(o); });
+    const sem = meus.find((o) => o.id === semItem && !o.pendente && !vencido(o));
+    if (sem) f.reais = Math.max(0, f.reais - preco(sem));
     f.meses = mesesDesde(itens.map((o) => o.desde).sort()[0]);
-    f.posts = store.get(`${side}_posts`, []).filter((p) => p.date >= janela).length;
-    f.comentarios = contarComentarios(comentariosAtivos().filter((c) => c.autor.side === side && ids.has(c.autor.id)
-      && c.data >= janela && donoDoPostEm(c.post).join() !== `${side},eu`));
+    const ids = idsMeus(side);
+    if (side === SIDE) f.posts += myPosts.length;
+    f.comentarios += contarComentarios(comentariosAtivos().filter((c) => c.autor.side === side && ids.has(c.autor.id)
+      && donoDoPostEm(c.post).join() !== `${side},eu`));
     return f;
   }
 
@@ -1053,7 +1331,10 @@
       const [lado, d] = donoDoPostEm(c.post);
       if (lado === side && d === dono && c.data >= janela) f[c.autor.side === side ? 'recebidos' : 'recebidos_outro']++;
     });
-    liked.forEach((postId) => { const [lado, d] = donoDoPostEm(postId); if (lado === side && d === dono) f.curtidas++; });
+    // curtidas: as do banco já contam; só a diferença desta visita (curtiu ou descurtiu agora)
+    const mudou = (postId, n) => { const [lado, d] = donoDoPostEm(postId); if (lado === side && d === dono) f.curtidas += n; };
+    liked.forEach((postId) => { if (!curtidasIniciais.has(postId)) mudou(postId, 1); });
+    curtidasIniciais.forEach((postId) => { if (!liked.has(postId)) mudou(postId, -1); });
     return f;
   }
 
@@ -1156,8 +1437,8 @@
   const carregados = new Map();
   const comentarioPorId = (id) => myComments.find((c) => c.id === id)
     || [...carregados.values()].flatMap((st) => st.lista).find((c) => c.id === id) || null;
-  // só o dono apaga: comentário feito neste navegador, por um item que é daqui
-  const souDono = (c) => myComments.includes(c) && idsMeus(c.autor.side).has(c.autor.id);
+  // só o dono apaga: comentário feito com um item da pessoa (o servidor confere de novo)
+  const souDono = (c) => !c.apagado && !!c.autor && idsMeus(c.autor.side).has(c.autor.id);
   const trechoDe = (c) => {
     const t = c.texto || (c.video ? '🎬 vídeo' : '');
     return t.length > 90 ? t.slice(0, 90).trimEnd() + '…' : t;
@@ -1194,11 +1475,13 @@
     </div>`;
   }
 
-  // lista do mais recente para o mais antigo: os feitos neste navegador, depois os do servidor;
+  // lista do mais recente para o mais antigo: os feitos nesta visita, depois os do servidor;
   // no fim (logo acima da caixa de escrever) o "ver mais", que traz os 10 anteriores ali mesmo
   function listaComentariosHtml(postId) {
     const st = carregados.get(postId);
-    const itens = [...locaisDoPost(postId)].reverse().concat([...(st?.lista || [])].reverse());
+    const locais = locaisDoPost(postId);
+    const doServidor = (st?.lista || []).filter((c) => !locais.some((l) => l.id === c.id)); // o feito agora pode vir de novo
+    const itens = [...locais].reverse().concat([...doServidor].reverse());
     let fim = '';
     if (st?.carregando) fim = '<p class="comment-loading">Carregando comentários…</p>';
     else if (st?.erro) fim = `<button type="button" class="comment-more" data-mais-comentarios="${postId}">Não deu para carregar. Tentar de novo</button>`;
@@ -1231,6 +1514,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.erro);
       data.comentarios.forEach((c) => { c.autor.nome = nomeProprio(c.autor.nome); });
+      receberExtras(data.extras); // nível e link de quem comentou
       st.lista = anteriores ? [...data.comentarios, ...st.lista] : data.comentarios;
       st.mais = data.mais;
     } catch {
@@ -1262,7 +1546,7 @@
     if (!eu) {
       return `<p class="comment-cta">Para comentar, garanta sua ${S.item} ${S.emoji}
         <button class="btn btn-gold btn-sm" type="button" data-open-buy>Garantir</button>
-        ou uma ${OTHER.item} ${OTHER.emoji} <a href="${esc(poteUrl(OTHER.slug))}">no outro pote</a>.</p>`;
+        ou uma ${OTHER.item} ${OTHER.emoji} <a href="${esc(poteUrl(OTHER.slug))}">no outro pote</a>.${DC.logado ? '' : ` Já tem? <a href="${esc(DC.loginUrl)}">Entre na sua conta</a>.`}</p>`;
     }
     const sd = DC.sides[eu.side];
     return `<form class="comment-form" data-post="${postId}">
@@ -1306,7 +1590,6 @@
         <button data-like="${p.id}" class="${liked.has(p.id) ? 'liked' : ''}">${S.emoji} ${likesOf(p)}</button>
         <button data-toggle-comments="${p.id}" class="${open ? 'active' : ''}">${commentsButton(p.id)}</button>
         <button data-share-post="${p.id}">Compartilhar</button>
-        <button data-view="${o.id}">Certificado</button>
       </div>
       <div class="comments"${open ? '' : ' hidden'}>${open ? commentsSectionHtml(p.id) : ''}</div>
     </article>`;
@@ -1348,7 +1631,15 @@
     if (!enviar.disabled) campo.form.requestSubmit(enviar);
   });
 
-  $('#feed').addEventListener('submit', (e) => {
+  // chamadas do mural (publicar, curtir, comentar, apagar): salvam no banco, em nome de quem está logado
+  async function apiMural(rota, dados) {
+    const res = await fetch(rota, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.erro || 'Não deu para salvar agora. Tente de novo.');
+    return json;
+  }
+
+  $('#feed').addEventListener('submit', async (e) => {
     const form = e.target.closest('.comment-form');
     if (!form) return;
     e.preventDefault();
@@ -1356,18 +1647,20 @@
     const { video, text } = extractVideo(form.elements.texto.value); // link de vídeo vira resposta em vídeo
     if (!eu || (!text && !video)) return;
     if (text.length > COMENTARIO_MAX) { toast(`Comentário: até ${COMENTARIO_MAX} caracteres (sem contar o link do vídeo)`); return; }
+    const enviar = $('.comment-send', form);
+    enviar.disabled = true;
+    let r;
+    try {
+      r = await apiMural('api/comentarios', { acao: 'comentar', post: form.dataset.post, texto: text, video, cita: citando.get(form.dataset.post)?.id || null });
+    } catch (err) {
+      toast(err.message, 4000);
+      enviar.disabled = false;
+      return;
+    }
     const nivelAntes = meuNivel(eu.side);
-    myComments.push({
-      id: `l${Date.now()}`,
-      post: form.dataset.post,
-      autor: { id: eu.id, side: eu.side, nome: eu.nome, foto: eu.foto, tipo: eu.tipo, selo: eu.selo },
-      texto: text || null,
-      video,
-      cita: citando.get(form.dataset.post) || null, // guarda o trecho: continua legível mesmo se o original sumir
-      data: todayIso(),
-    });
+    r.comentario.autor.nome = nomeProprio(r.comentario.autor.nome);
+    myComments.push(r.comentario);
     citando.delete(form.dataset.post);
-    store.set('comments', myComments);
     provocadoresCache = null; // o ranking do mês pode mudar
     avisaSubida(eu.side, nivelAntes); // comentar também sobe o nível (e o de quem recebeu)
     refreshComments(form.dataset.post);
@@ -1391,7 +1684,6 @@
   $('#feed').addEventListener('click', (e) => {
     const like = e.target.closest('[data-like]');
     const share = e.target.closest('[data-share-post]');
-    const view = e.target.closest('[data-view]');
     const toggle = e.target.closest('[data-toggle-comments]');
     if (toggle) {
       const id = toggle.dataset.toggleComments;
@@ -1447,7 +1739,7 @@
     // apagar (só o dono): 1º clique pede confirmação, 2º apaga — fica o aviso "comentário apagado"
     const apagar = e.target.closest('[data-apagar]');
     if (apagar) {
-      const c = myComments.find((x) => x.id === apagar.dataset.apagar);
+      const c = comentarioPorId(apagar.dataset.apagar);
       if (!c || !souDono(c)) return;
       if (!apagar.classList.contains('confirmar')) {
         apagar.classList.add('confirmar');
@@ -1455,24 +1747,41 @@
         setTimeout(() => { apagar.classList.remove('confirmar'); apagar.textContent = 'Apagar'; }, 4000);
         return;
       }
-      Object.assign(c, { apagado: true, texto: null, video: null, cita: null });
-      store.set('comments', myComments);
-      provocadoresCache = null; // deixa de contar para provocadores e níveis
-      limparTempero();
-      refreshListaComentarios(c.post);
-      renderProvocadores();
-      toast('Comentário apagado.');
+      apagar.disabled = true;
+      apiMural('api/comentarios', { acao: 'apagar', id: c.id }).then(() => {
+        // o do servidor já estava na contagem da página: desconta
+        if (!myComments.includes(c) && CONTAGEM[c.post]) {
+          CONTAGEM[c.post].total = Math.max(0, CONTAGEM[c.post].total - 1);
+          if (c.autor.side !== SIDE) CONTAGEM[c.post].visitantes = Math.max(0, (CONTAGEM[c.post].visitantes || 0) - 1);
+        }
+        Object.assign(c, { apagado: true, texto: null, video: null, cita: null });
+        provocadoresCache = null; // deixa de contar para provocadores e níveis
+        limparTempero();
+        refreshListaComentarios(c.post);
+        renderProvocadores();
+        toast('Comentário apagado.');
+      }).catch((err) => { apagar.disabled = false; toast(err.message, 4000); });
     }
     if (e.target.closest('[data-play]')) playVideo(e.target.closest('[data-video]'));
     if (e.target.closest('[data-stop]')) stopVideo(e.target.closest('[data-video]'));
     if (like) {
+      if (!DC.logado) { toast('Entre na sua conta para curtir.'); return; }
       const id = like.dataset.like;
-      liked.has(id) ? liked.delete(id) : liked.add(id);
-      store.set('likes', [...liked]);
-      limparTempero(); // curtida recebida conta no nível do autor
+      const curtir = !liked.has(id);
       const p = postsNaTela().find((x) => x.id === id);
-      like.classList.toggle('liked', liked.has(id));
-      like.textContent = `${S.emoji} ${likesOf(p)}`;
+      const mostrar = () => {
+        like.classList.toggle('liked', liked.has(id));
+        like.textContent = `${S.emoji} ${likesOf(p)}`;
+      };
+      curtir ? liked.add(id) : liked.delete(id); // aparece na hora; se o servidor recusar, volta
+      limparTempero(); // curtida recebida conta no nível do autor
+      mostrar();
+      apiMural('api/posts', { acao: 'curtir', post: id, curtir }).catch((err) => {
+        curtir ? liked.delete(id) : liked.add(id);
+        limparTempero();
+        mostrar();
+        toast(err.message, 4000);
+      });
     }
     if (share) {
       const p = postsNaTela().find((x) => x.id === share.dataset.sharePost);
@@ -1481,7 +1790,6 @@
       if (navigator.share) navigator.share({ title: S.name, text, url: oliveUrl(o) }).catch(() => {});
       else window.open(`https://wa.me/?text=${encodeURIComponent(text + ' ' + oliveUrl(o))}`, '_blank', 'noopener');
     }
-    if (view) openCert(byId(Number(view.dataset.view)));
   });
 
   // composer: só quem tem item deste pote publica (comentar vale para os dois lados)
@@ -1518,17 +1826,28 @@
   composerText?.addEventListener('focus', () => {
     if (!mine.length) { toast(`Só ${S.members} podem publicar aqui. Garanta sua ${S.item}!`); }
   });
-  composer?.addEventListener('submit', (e) => {
+  composer?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const eu = mine[mine.length - 1];
     if (!eu) { goStep(1); openModal('#buy-modal'); updateTotal(); return; }
     const { video, text } = extractVideo(composerText.value);
     if (!text && !video) return;
     if (text.length > TEXT_MAX) { toast(`Máximo de ${TEXT_MAX} caracteres (sem contar o link)`); return; }
+    const botao = composer.querySelector('[type="submit"]');
+    if (botao) botao.disabled = true;
+    let r;
+    try {
+      r = await apiMural('api/posts', { acao: 'publicar', lado: SIDE, texto: text, video });
+    } catch (err) {
+      toast(err.message, 4000);
+      return;
+    } finally {
+      if (botao) botao.disabled = false;
+    }
     const nivelAntes = meuNivel(SIDE);
-    myPosts.unshift({ id: `${SIDE}-p${Date.now()}`, oliveId: eu.id, text, video, date: todayIso(), likes: 0 });
-    store.set(`${SIDE}_posts`, myPosts);
-    if (video) refreshOlive(eu); // aparece o selo de play no item
+    myPosts.unshift({ ...r.post, isNew: true });
+    const autor = byId(r.post.oliveId) || eu;
+    if (video) refreshOlive(autor); // aparece o selo de play no item
     composerText.value = '';
     updateComposerPreview();
     $$('.tab').forEach((x) => x.classList.toggle('active', x.dataset.sort === 'recentes'));
@@ -1564,7 +1883,7 @@
     </li>`).join('');
   }
 
-  // ---------- enquete (uma por vez, criada no painel /admin/) ----------
+  // ---------- enquete (uma por vez, criada no painel /cozinha/) ----------
   const DUEL_ORDER = ['esquerda', 'direita'];
 
   function pollResultsHtml(p) {
@@ -1583,6 +1902,97 @@
       ? `<p class="poll-legend">${DUEL_ORDER.map((s) => `<span><i style="background:${DC.sides[s].theme.gold}"></i>${DC.sides[s].emoji} ${esc(DC.sides[s].name)}: <b>${(p.porLado?.[s] || 0).toLocaleString('pt-BR')}</b></span>`).join('')}</p>`
       : '';
     return `<ul class="poll-results">${rows}</ul>${legend}`;
+  }
+
+  // ---------- enquete: imagem para compartilhar (Stories 1080×1920 ou paisagem 1600×900, para o WhatsApp) ----------
+  // Pergunta e opções; com o resultado liberado, as porcentagens (no duelo, a barra dividida pelos dois potes).
+  function linhasTexto(g, texto, max) {
+    const out = [];
+    let linha = '';
+    for (const w of String(texto).split(/\s+/)) {
+      const t = linha ? `${linha} ${w}` : w;
+      if (g.measureText(t).width > max && linha) { out.push(linha); linha = w; } else linha = t;
+    }
+    if (linha) out.push(linha);
+    return out;
+  }
+  const cortar = (g, texto, max) => {
+    let t = String(texto);
+    while (t.length > 1 && g.measureText(t).width > max) t = t.slice(0, -2) + '…';
+    return t;
+  };
+
+  function downloadEnquete(formato) {
+    const p = DC.enquete;
+    if (!p) return;
+    const T = S.theme;
+    const vertical = formato === 'stories';
+    const W = vertical ? 1080 : 1600, H = vertical ? 1920 : 900;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = T.bg; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W / 2, H * 0.12, 50, W / 2, H * 0.12, W);
+    glow.addColorStop(0, T.glow); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+
+    const m = vertical ? 80 : 90;
+    const cw = W - m * 2;
+    let y = vertical ? 210 : 100;
+    g.textAlign = 'center';
+    g.fillStyle = T['gold-2']; g.font = `700 ${vertical ? 34 : 28}px Inter, sans-serif`;
+    g.fillText(p.duelo ? `DUELO ENTRE OS POTES  ${DC.sides.esquerda.emoji} × ${DC.sides.direita.emoji}` : `ENQUETE · ${S.name.toUpperCase()}`, W / 2, y);
+    y += vertical ? 120 : 80;
+    const fq = vertical ? 78 : 56;
+    g.fillStyle = '#f4ecd8'; g.font = `800 ${fq}px Fraunces, Georgia, serif`;
+    linhasTexto(g, p.pergunta, cw).slice(0, vertical ? 5 : 2).forEach((l) => { g.fillText(l, W / 2, y); y += fq * 1.18; });
+    y += vertical ? 40 : 10;
+
+    const total = Math.max(1, p.total || 0);
+    const alt = vertical ? 150 : Math.min(104, (H - y - 130) / p.opcoes.length);
+    const caixa = alt - (vertical ? 26 : 18);
+    const fo = vertical ? 42 : Math.min(34, caixa * 0.42);
+    p.opcoes.forEach((o) => {
+      roundRect(g, m, y, cw, caixa, 22); g.fillStyle = 'rgba(255,255,255,.08)'; g.fill();
+      let direita = 0;
+      if (p.mostra) {
+        const pct = Math.round((o.votos / total) * 100);
+        g.save();
+        roundRect(g, m, y, cw, caixa, 22); g.clip();
+        g.globalAlpha = 0.6;
+        if (p.duelo) {
+          let bx = m;
+          DUEL_ORDER.forEach((s) => { const w = cw * ((o.porLado?.[s] || 0) / total); g.fillStyle = DC.sides[s].theme.gold; g.fillRect(bx, y, w, caixa); bx += w; });
+        } else {
+          g.fillStyle = T.gold; g.fillRect(m, y, (cw * pct) / 100, caixa);
+        }
+        g.restore();
+        g.textAlign = 'right'; g.fillStyle = '#fff'; g.font = `800 ${fo * 1.15}px Inter, sans-serif`;
+        g.fillText(`${pct}%`, m + cw - 32, y + caixa / 2 + fo * 0.4);
+        direita = g.measureText('100%').width + 50;
+      }
+      g.textAlign = 'left'; g.fillStyle = '#f4ecd8'; g.font = `600 ${fo}px Inter, sans-serif`;
+      g.fillText(cortar(g, o.texto, cw - 64 - direita), m + 32, y + caixa / 2 + fo * 0.36);
+      y += alt;
+    });
+
+    // rodapé: quantos votaram (no duelo, por pote) e o convite
+    g.textAlign = 'center';
+    if (p.mostra && p.total !== null) {
+      g.fillStyle = '#cfc8b0'; g.font = `600 ${vertical ? 34 : 26}px Inter, sans-serif`;
+      g.fillText(p.duelo
+        ? DUEL_ORDER.map((s) => `${DC.sides[s].emoji} ${DC.sides[s].name}: ${(p.porLado?.[s] || 0).toLocaleString('pt-BR')}`).join('   ·   ')
+        : `${p.total.toLocaleString('pt-BR')} ${p.total === 1 ? 'voto' : 'votos'}`, W / 2, y + (vertical ? 30 : 16));
+    }
+    g.fillStyle = '#f4ecd8'; g.font = `600 ${vertical ? 40 : 30}px Inter, sans-serif`;
+    g.fillText('Vote você também:', W / 2, H - (vertical ? 230 : 90));
+    g.fillStyle = T['gold-2']; g.font = `800 ${vertical ? 48 : 36}px Inter, sans-serif`;
+    g.fillText(location.host || 'potepolitico.com.br', W / 2, H - (vertical ? 160 : 44));
+
+    const a = document.createElement('a');
+    a.download = `enquete-${p.id}-${vertical ? 'stories' : 'whatsapp'}.png`;
+    a.href = c.toDataURL('image/png');
+    a.click();
   }
 
   function renderPoll() {
@@ -1609,6 +2019,14 @@
     const fim = p.termina ? ` · encerra em ${fmtDate(p.termina.slice(0, 10))} às ${p.termina.slice(11, 16)}` : '';
     box.innerHTML = `
       <div class="poll-head">
+        <button type="button" class="poll-share" data-poll-share aria-label="Compartilhar enquete" title="Compartilhar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+        </button>
+        <div class="poll-share-menu" hidden>
+          <b>Baixar imagem da enquete</b>
+          <button type="button" class="btn btn-gold btn-sm" data-poll-img="stories">📱 Stories (vertical)</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-poll-img="whatsapp">💬 WhatsApp (paisagem)</button>
+        </div>
         <span class="tag">${p.duelo ? `Duelo entre os potes ${DC.sides.esquerda.emoji} × ${DC.sides.direita.emoji}` : 'Enquete'}</span>
         <h2>${esc(p.pergunta)}</h2>
         ${p.descricao ? `<p class="poll-desc">${esc(p.descricao)}</p>` : ''}
@@ -1620,6 +2038,10 @@
   }
 
   $('#poll')?.addEventListener('click', async (e) => {
+    // compartilhar: o ícone abre as opções; cada uma baixa a imagem no formato
+    if (e.target.closest('[data-poll-share]')) { const menu = $('.poll-share-menu'); menu.hidden = !menu.hidden; return; }
+    const img = e.target.closest('[data-poll-img]');
+    if (img) { downloadEnquete(img.dataset.pollImg); $('.poll-share-menu').hidden = true; toast('Imagem da enquete baixada!'); return; }
     const btn = e.target.closest('[data-vote]');
     if (!btn || DC.enquete.meuVoto !== null) return;
     if (!DC.logado) { location.href = DC.loginUrl; return; } // volta para a enquete depois de entrar
@@ -1641,6 +2063,150 @@
     renderPoll();
   });
 
+  // ---------- apoio partidário (partials/partidos.php): todos os partidos, até 3 por pessoa + ranking ----------
+  // 1ª linha: os principais (PART.destaque); depois os demais até PART.visiveis e "Exibir mais" mostra o resto.
+  // Quem não entrou pode escolher: a escolha fica guardada e é registrada sozinha depois do login.
+  const PART = DC.partidos;
+  if (PART && $('#partidos')) {
+    const chavePendente = 'partidos_pendente';
+    let meus = [...PART.meus];
+    let ranking = PART.ranking.map((r) => ({ ...r }));
+    let verTodos = false;
+    let exibirMais = false;
+    let recemMarcado = null;
+    let salvarTimer = null;
+    const infoPartido = (sigla) => PART.lista.find((p) => p.sigla === sigla);
+    const TOP = 5;
+
+    const quadrado = (p) => {
+      const on = meus.includes(p.sigla);
+      const cheio = !on && meus.length >= PART.max;
+      return `<button type="button" class="partido${on ? ' is-on' : ''}${cheio ? ' is-cheio' : ''}${p.sigla === recemMarcado ? ' pop' : ''}"
+          data-partido="${esc(p.sigla)}" aria-pressed="${on}" title="${esc(p.nome)}" style="--p-cor:${p.cor};--p-texto:${p.cor_texto}">
+        <span class="partido-sigla${p.sigla.length > 8 ? ' is-longa' : ''}">${siglaEmLinhas(p.sigla)}</span>
+        ${on ? '<span class="partido-check" aria-hidden="true">✓</span>' : ''}
+      </button>`;
+    };
+    // barra do ranking: partido de cor quase preta (Missão) usa a 2ª cor dele (amarelo), senão some no fundo escuro
+    const corDaBarra = (p) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(p.cor.slice(i, i + 2), 16));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b < 25 ? p.cor_texto : p.cor;
+    };
+    // sigla comprida quebra em duas linhas num ponto fixo: REPUBLICANOS → REPUBLI / CANOS
+    const siglaEmLinhas = (s) => (s.length > 8 ? `${esc(s.slice(0, Math.ceil(s.length * 0.58)))}<br>${esc(s.slice(Math.ceil(s.length * 0.58)))}` : esc(s));
+
+    function renderPartidos() {
+      // escolhido fora dos visíveis continua aparecendo (senão a pessoa não vê o que marcou)
+      const demais = PART.lista.slice(PART.destaque);
+      const visiveis = exibirMais ? demais
+        : demais.filter((p, i) => i < PART.visiveis - PART.destaque || meus.includes(p.sigla));
+      const escondidos = demais.length - visiveis.length;
+      $('#partidos-grid').innerHTML =
+        `<div class="partidos-destaque">${PART.lista.slice(0, PART.destaque).map(quadrado).join('')}</div>
+        <div class="partidos-demais">${visiveis.map(quadrado).join('')}
+          ${escondidos > 0 || exibirMais ? `<button type="button" class="partido partido-mais" data-exibir-mais>
+            <span>${exibirMais ? 'Exibir menos' : `+${escondidos}<small>Exibir mais</small>`}</span></button>` : ''}
+        </div>`;
+      recemMarcado = null;
+
+      const faltam = PART.max - meus.length;
+      let status = meus.length
+        ? `Você apoia <b>${meus.map(esc).join(' · ')}</b> ${faltam ? `— ainda pode escolher ${faltam}` : '— limite de 3 atingido'}`
+        : `Toque nos quadrados para apoiar (até ${PART.max}).`;
+      if (!DC.logado) {
+        status += meus.length
+          ? ` <a class="btn btn-gold btn-sm" href="${esc(DC.loginPartidos)}">🔒 Entrar para registrar</a>`
+          : ' <span class="partidos-cadeado">🔒 Para contar no ranking, é só entrar com o e-mail.</span>';
+      }
+      $('#partidos-status').innerHTML = status;
+
+      // ranking: barra proporcional ao mais apoiado; o seu aparece destacado
+      const total = ranking.reduce((s, r) => s + r.n, 0) || 1;
+      const maior = Math.max(1, ...ranking.map((r) => r.n));
+      const lista = verTodos ? ranking : ranking.slice(0, TOP);
+      $('#partidos-ranking').innerHTML = lista.map((r, i) => {
+        const p = infoPartido(r.sigla);
+        return `<li class="${meus.includes(r.sigla) ? 'is-meu' : ''}">
+          <span class="rank-pos">${i === 0 && r.n ? '👑' : `${i + 1}º`}</span>
+          <span class="rank-sigla" style="--p-cor:${p.cor};--p-texto:${p.cor_texto}" title="${esc(p.nome)}">${esc(r.sigla)}</span>
+          <span class="rank-barra"><i style="width:${((r.n / maior) * 100).toFixed(1)}%;background:${corDaBarra(p)}"></i></span>
+          <span class="rank-n">${r.n.toLocaleString('pt-BR')}<small>${Math.round((r.n / total) * 100)}%</small></span>
+        </li>`;
+      }).join('');
+      const todos = $('#partidos-todos');
+      todos.hidden = ranking.length <= TOP;
+      todos.textContent = verTodos ? 'Ver menos' : `Ver todos os ${ranking.length} partidos`;
+    }
+
+    // conta na hora (o servidor confirma em seguida)
+    function ajustarRanking(sigla, delta) {
+      const r = ranking.find((x) => x.sigla === sigla);
+      if (r) r.n = Math.max(0, r.n + delta);
+      ranking.sort((a, b) => b.n - a.n);
+    }
+
+    async function salvarPartidos() {
+      try {
+        const res = await fetch('api/partidos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siglas: meus }),
+        });
+        const data = await res.json();
+        if (data.login) { store.set(chavePendente, meus); location.href = DC.loginPartidos; return; }
+        if (!res.ok) throw new Error(data.erro);
+        meus = data.meus;
+        ranking = data.ranking;
+        renderPartidos();
+      } catch (e) {
+        toast(e.message || 'Não foi possível registrar agora. Tente de novo.');
+      }
+    }
+
+    $('#partidos-grid').addEventListener('click', (e) => {
+      if (e.target.closest('[data-exibir-mais]')) { exibirMais = !exibirMais; renderPartidos(); return; }
+      const b = e.target.closest('[data-partido]');
+      if (!b) return;
+      const sigla = b.dataset.partido;
+      if (meus.includes(sigla)) {
+        meus = meus.filter((s) => s !== sigla);
+        if (DC.logado) ajustarRanking(sigla, -1);
+      } else if (meus.length >= PART.max) {
+        b.classList.remove('treme');
+        void b.offsetWidth; // reinicia a animação
+        b.classList.add('treme');
+        toast(`Máximo de ${PART.max} partidos. Tire um para escolher outro.`);
+        return;
+      } else {
+        meus = [...meus, sigla];
+        recemMarcado = sigla;
+        if (DC.logado) ajustarRanking(sigla, +1);
+      }
+      renderPartidos();
+      if (DC.logado) {
+        clearTimeout(salvarTimer);
+        salvarTimer = setTimeout(salvarPartidos, 600); // cliques seguidos viram um envio só
+      } else {
+        store.set(chavePendente, meus); // registra sozinho depois de entrar
+      }
+    });
+
+    $('#partidos-todos').addEventListener('click', () => { verTodos = !verTodos; renderPartidos(); });
+
+    // voltou do login com uma escolha guardada: registra agora
+    const pendente = store.get(chavePendente, null);
+    if (pendente) {
+      if (DC.logado) {
+        store.set(chavePendente, null);
+        meus = pendente.filter((s) => infoPartido(s)).slice(0, PART.max);
+        salvarPartidos().then(() => toast(`${S.emoji} Apoio registrado! Confira o ranking.`, 3500));
+      } else {
+        meus = pendente.filter((s) => infoPartido(s)).slice(0, PART.max);
+      }
+    }
+    renderPartidos();
+  }
+
   // ---------- mapa da guerra dos potes (partials/mapa.php) ----------
   // Cada estado com a cor de quem tem mais itens lá; o mesmo mapa nos dois potes, textos de S.mapa.
   const MAPA_NEUTRO = '#3b3a31';
@@ -1661,7 +2227,8 @@
     const soma = (uf, s, n) => { (c[uf] ??= Object.fromEntries(DUEL_ORDER.map((x) => [x, 0])))[s] += n; };
     DUEL_ORDER.forEach((s) => {
       Object.entries(DC.mapa?.contagem?.[s] || {}).forEach(([uf, n]) => soma(uf, s, n));
-      store.get(`${s}_mine`, []).filter((o) => !vencido(o)).forEach((o) => soma(o.uf, s, 1));
+      // os ativos já vêm na contagem do servidor; os pendentes (só a pessoa vê) somam aqui
+      meusDe(s).filter((o) => o.pendente && !vencido(o)).forEach((o) => soma(o.uf, s, 1));
     });
     return c;
   }
@@ -1686,8 +2253,10 @@
   const centavos = (tipo, s) => Math.round(DC.sides[s].types[tipo].price * 100);
 
   function candidatosUf(uf, s) {
-    const lista = (DC.mapa?.reis?.[s]?.[uf] || []).map((r) => ({ ...r, side: s }));
-    const meus = store.get(`${s}_mine`, []).filter((o) => !vencido(o) && o.uf === uf);
+    // a pessoa entra como "eu" com todos os itens dela ali (inclusive os pendentes); a entrada do servidor sai
+    const ids = new Set(meusDe(s).map((o) => o.id));
+    const lista = (DC.mapa?.reis?.[s]?.[uf] || []).filter((r) => !ids.has(r.dono) && !ids.has(r.id)).map((r) => ({ ...r, side: s }));
+    const meus = meusDe(s).filter((o) => !vencido(o) && o.uf === uf);
     if (meus.length) {
       const itens = {};
       meus.forEach((o) => { itens[o.tipo] = (itens[o.tipo] || 0) + 1; });
@@ -1762,6 +2331,93 @@
     const disputados = todos.filter((e) => e.dono).slice(0, max - 1);
     return [...disputados, ...todos.filter((e) => !e.dono)].slice(0, max);
   }
+
+  // ---------- mapa: imagem para compartilhar (Stories 1080×1920 ou paisagem 1600×900, para o WhatsApp) ----------
+  // O próprio mapa da tela (já pintado, com as coroas) vira imagem: as cores calculadas pelo CSS entram no SVG.
+  function mapaComoImagem() {
+    const orig = $('#mapa svg.mapa');
+    const copia = orig.cloneNode(true);
+    const origs = $$('*', orig);
+    $$('*', copia).forEach((el, i) => {
+      const cs = getComputedStyle(origs[i]);
+      ['fill', 'stroke', 'stroke-width', 'paint-order', 'font-size', 'font-weight', 'text-anchor', 'dominant-baseline', 'opacity']
+        .forEach((k) => { const v = cs.getPropertyValue(k); if (v) el.style.setProperty(k, v); });
+      el.style.fontFamily = 'Arial, sans-serif';
+      el.style.animation = 'none';
+      el.classList.remove('is-ativo');
+    });
+    copia.setAttribute('xmlns', SVG);
+    const [, , vw, vh] = copia.getAttribute('viewBox').split(/\s+/).map(Number);
+    copia.setAttribute('width', vw);
+    copia.setAttribute('height', vh);
+    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(copia)], { type: 'image/svg+xml' }));
+    return loadImage(url).then((img) => { URL.revokeObjectURL(url); return { img, vw, vh }; });
+  }
+
+  async function downloadMapa(formato) {
+    const { img, vw, vh } = await mapaComoImagem();
+    const T = S.theme;
+    const vertical = formato === 'stories';
+    const W = vertical ? 1080 : 1600, H = vertical ? 1920 : 900;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = T.bg; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W / 2, H * 0.12, 50, W / 2, H * 0.12, W);
+    glow.addColorStop(0, T.glow); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+
+    // placar: estados que cada pote domina e itens no pote
+    const cont = contagemMapa();
+    const placar = Object.fromEntries(DUEL_ORDER.map((s) => [s, { estados: 0, itens: 0 }]));
+    $$('#mapa .uf').forEach((p) => {
+      const e = estadoMapa(cont, p.dataset.uf);
+      if (e.dono && e.dono !== 'empate') placar[e.dono].estados++;
+      DUEL_ORDER.forEach((s) => { placar[s].itens += cont[p.dataset.uf]?.[s] || 0; });
+    });
+
+    g.textAlign = 'center';
+    g.fillStyle = T['gold-2']; g.font = `700 ${vertical ? 34 : 26}px Inter, sans-serif`;
+    g.fillText(`GUERRA DOS POTES  ${DUEL_ORDER.map((s) => DC.sides[s].emoji).join(' × ')}`, W / 2, vertical ? 170 : 70);
+    const ft = vertical ? 64 : 46;
+    g.fillStyle = '#f4ecd8'; g.font = `800 ${ft}px Fraunces, Georgia, serif`;
+    let y = vertical ? 260 : 130;
+    linhasTexto(g, S.mapa.titulo, W - 160).slice(0, 2).forEach((l) => { g.fillText(l, W / 2, y); y += ft * 1.15; });
+
+    // o mapa: no Stories, embaixo do título; na paisagem, à esquerda (o placar fica à direita)
+    const area = vertical ? { x: 60, y: y + 10, w: W - 120, h: 960 } : { x: 60, y: y - 10, w: 860, h: H - y - 40 };
+    const esc2 = Math.min(area.w / vw, area.h / vh);
+    const mw = vw * esc2, mh = vh * esc2;
+    g.drawImage(img, area.x + (area.w - mw) / 2, area.y + (area.h - mh) / 2, mw, mh);
+
+    const px = vertical ? W / 2 : 1240;
+    let py = vertical ? area.y + (area.h + mh) / 2 + 140 : 330; // no Stories: espaço entre o RS e o placar
+    const linhaPlacar = (s) => {
+      const sd = DC.sides[s];
+      g.fillStyle = sd.mapa.cor; g.font = `800 ${vertical ? 52 : 44}px Inter, sans-serif`;
+      g.fillText(`${sd.emoji} ${placar[s].estados} ${placar[s].estados === 1 ? 'estado' : 'estados'}`, px, py);
+      g.fillStyle = '#cfc8b0'; g.font = `600 ${vertical ? 32 : 28}px Inter, sans-serif`;
+      g.fillText(`${sd.name} · ${placar[s].itens.toLocaleString('pt-BR')} no pote`, px, py + (vertical ? 48 : 42));
+      py += vertical ? 130 : 130;
+    };
+    DUEL_ORDER.forEach(linhaPlacar);
+
+    g.fillStyle = T['gold-2']; g.font = `800 ${vertical ? 48 : 38}px Inter, sans-serif`;
+    g.fillText(location.host || 'potepolitico.com.br', vertical ? W / 2 : px, H - (vertical ? 110 : 60)); // só o site
+
+    const a = document.createElement('a');
+    a.download = `mapa-potes-${vertical ? 'stories' : 'whatsapp'}.png`;
+    a.href = c.toDataURL('image/png');
+    a.click();
+  }
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-mapa-share]')) { $('#mapa-share-menu').hidden = !$('#mapa-share-menu').hidden; return; }
+    const img = e.target.closest('[data-mapa-img]');
+    if (!img) return;
+    $('#mapa-share-menu').hidden = true;
+    downloadMapa(img.dataset.mapaImg).then(() => toast('Imagem do mapa baixada!')).catch(() => toast('Não deu para gerar a imagem agora.'));
+  });
 
   function renderMapa() {
     const box = $('#mapa');
@@ -1852,7 +2508,7 @@
   let pedindoLinks = null;
   function garantirLinksLocais() {
     const faltam = Object.keys(DC.sides)
-      .flatMap((s) => store.get(`${s}_mine`, []).map((o) => ({ lado: s, id: o.id })))
+      .flatMap((s) => meusDe(s).map((o) => ({ lado: s, id: o.id })))
       .filter((x) => !linkPerfilExato(x.lado, x.id));
     if (!faltam.length) return Promise.resolve();
     pedindoLinks ??= fetch('api/link', {
@@ -1863,7 +2519,6 @@
       .then((res) => res.json())
       .then(({ links }) => {
         Object.entries(links || {}).forEach(([s, porId]) => Object.entries(porId).forEach(([id, u]) => { linksLocais[`${s}:${id}`] = u; }));
-        store.set('links', linksLocais);
         renderFeed();
         renderNewest();
         renderProvocadores();
@@ -1897,9 +2552,9 @@
       return o ? { side: m[1], o, text: o.frase } : null;
     }
     const side = postId.split('-')[0];
-    const p = store.get(`${side}_posts`, []).find((x) => x.id === postId);
+    const p = [...myPosts, ...feed.posts].find((x) => x.id === postId);
     if (!p) return null;
-    const owner = store.get(`${side}_mine`, []).find((x) => x.id === p.oliveId);
+    const owner = (side === SIDE ? olives : [...(DC.otherItems || []), ...meusDe(side)]).find((x) => x.id === p.oliveId);
     return owner ? { side, o: owner, text: p.text || '(vídeo)' } : null;
   }
 
@@ -1944,9 +2599,12 @@
     return `<span class="nivel-perda">⚠ Se ela vencer, você ${sem ? `cai para o nível <b>${esc(nivelInfo(SIDE, sem).nome)}</b> ${nivelInfo(SIDE, sem).icone}` : 'perde seu nível'}.</span>`;
   }
 
+  // O perfil é da PESSOA: todas as azeitonas dela neste pote (o link é de uma delas; o servidor manda o grupo em DC.pessoa).
+  // Nome, foto, cidade e frase vêm da azeitona mais recente (a edição do perfil troca em todas).
+  // Certificado, validade e renovação são de cada azeitona — e só a própria pessoa vê.
   function renderProfile() {
     const card = $('#profile-card');
-    // "Ver meu perfil" (perfil com meu=1): vai para o item de quem comprou neste navegador
+    // "Ver meu perfil" (perfil com meu=1): vai para o perfil de quem está logado
     if (DC.meu) {
       const eu = me();
       if (eu) {
@@ -1962,8 +2620,8 @@
       $$('.profile-side, .profile-stats-wrap, #mural, .profile-page > .section.alt').forEach((el) => { el.hidden = true; });
       return;
     }
-    const o = byId(DC.profileId);
-    if (!o) {
+    const o0 = byId(DC.profileId);
+    if (!o0) {
       card.innerHTML = `<div class="profile-missing">
         <h1>Perfil não encontrado</h1>
         <p>Essa ${S.item} não está no pote (ou o link está errado).</p>
@@ -1973,62 +2631,89 @@
       return;
     }
 
-    const isMine = mine.some((m) => m.id === o.id);
+    const grupo = itensDaPessoa(o0);
+    const ids = new Set(grupo.map((x) => x.id));
+    const o = [...grupo].sort((a, b) => (b.criado || 0) - (a.criado || 0) || b.id - a.id)[0]; // a mais recente
+    const isMine = meusIds.has(o0.id);
+    const noPoteAgora = grupo.filter((x) => !vencido(x));
+    const antiga = [...(noPoteAgora.length ? noPoteAgora : grupo)].sort((a, b) => a.desde.localeCompare(b.desde))[0]; // "desde" e anel
+    const anel = anelDe(antiga);
     const posts = allPosts();
     const received = posts.reduce((n, p) => n + totalComentarios(p.id), 0);
     const visitors = posts.reduce((n, p) => n + visitantesDoPost(p.id), 0);
-    // o que a pessoa comentou (servidor: DC.comentarios.feitos) + o que foi feito neste navegador; apagados não entram
-    const made = [...(DC.comentarios?.feitos || []), ...comentariosAtivos()].filter((c) => c.autor.side === SIDE && c.autor.id === o.id);
+    // o que a pessoa comentou (os 20 últimos, do servidor) + o que fez nesta visita; apagados não entram
+    const made = [...comentariosAtivos(), ...(DC.comentarios?.feitos || [])]
+      .filter((c, i, todos) => c.autor.side === SIDE && ids.has(c.autor.id) && todos.findIndex((x) => x.id === c.id) === i)
+      .slice(0, 20);
     const madeOther = made.filter((c) => !c.post.startsWith(SIDE + '-'));
     const likes = posts.reduce((n, p) => n + likesOf(p), 0);
-    const vale = validade(o);
-    const venceu = vencido(o);
-    const faltam = diasAte(vale);
-    const anel = anelDe(o);
-    const preco = money(S.types[o.tipo].price);
+    const quem = o.nome; // nome inteiro: "Dr. Almeida" (só a 1ª palavra daria "Dr.")
 
     const badges = [
       isMine && ['voce', '★ Este é você'],
-      venceu ? ['vencido', '⏳ Fora do pote (venceu)'] : [`tempo-${anel || 'normal'}`, tempoTexto(o)],
-      provocadores()[0]?.o.id === o.id && ['provoc', `🔥 Provocador(a) do mês de ${mesNome()}`],
-      o.id <= 100 && ['fundador', `🏅 ${o.id <= 10 ? 'Fundador(a) top 10' : 'Fundador(a)'}`],
-      scaleOf(o) > 1 && ['grande', `${S.emoji} ${S.Item} ${typeLabel(o.tipo)}`],
-      videoOf(o) && ['video', '🎬 Publica vídeos'],
+      grupo.some((x) => x.pendente) && ['pendente', '⏳ Pagamento em confirmação · só você vê'],
+      noPoteAgora.length ? [`tempo-${anel || 'normal'}`, tempoTexto(antiga)] : ['vencido', '⏳ Fora do pote (venceu)'],
+      ids.has(provocadores()[0]?.o.id) && ['provoc', `🔥 Provocador(a) do mês de ${mesNome()}`],
+      grupo[0].id <= 100 && ['fundador', `🏅 ${grupo[0].id <= 10 ? 'Fundador(a) top 10' : 'Fundador(a)'}`],
+      grupo.some((x) => scaleOf(x) > 1) && ['grande', `${S.emoji} Tem ${S.Item} ${typeLabel('grande')}`],
+      grupo.some((x) => videoOf(x)) && ['video', '🎬 Publica vídeos'],
       madeOther.length && ['debate', `${OTHER.emoji} Debate com o outro lado`],
       likes >= 300 && ['popular', '🔥 Popular no mural'],
     ].filter(Boolean);
 
+    // cada azeitona da pessoa: número, tipo e — só para ela — validade, certificado e renovação
+    // a lista: as 5 mais recentes vêm com a página (DC.pessoaItens); "Carregar mais" busca de 5 em 5 no servidor
+    const pag = DC.pessoaItens || { itens: [...grupo].reverse(), mais: false };
+    const itemHtml = (x) => {
+      const vale = validade(x);
+      const faltam = diasAte(vale);
+      const preco = money(S.types[x.tipo].price);
+      let status = '';
+      let acoes = '';
+      if (isMine) {
+        if (x.pendente) {
+          status = '⏳ Pagamento em confirmação';
+        } else if (vencido(x)) {
+          status = `Venceu em ${fmtDate(vale)} e saiu do pote. Renovando, a data recomeça.`;
+          acoes = `<button class="btn btn-gold btn-sm" type="button" data-renew="${x.id}">Voltar ao pote · ${preco}</button>`;
+        } else {
+          status = `No pote até <b>${fmtDate(vale)}</b>${faltam <= 30 ? ` — <b>faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}</b>` : ''}`
+            + (faltam <= 30 ? ` ${nivelPerdaHtml(x)}` : '');
+          acoes = `<button class="btn btn-ghost btn-sm" type="button" data-renew="${x.id}">Renovar +1 ano · ${preco}</button>`;
+        }
+        acoes = `<button class="btn btn-ghost btn-sm" type="button" data-view="${x.id}">Certificado</button>${acoes}`;
+      }
+      return `<li class="${faltam <= 30 && isMine && !x.pendente ? 'is-soon' : ''}${vencido(x) ? ' is-expired' : ''}">
+        ${itemSvg(x.tipo, SIDE, Math.min(scaleOf(x), 1.2))}
+        <span class="pi-info"><b>${numero(x.id)} · ${esc(S.Item)} ${esc(typeLabel(x.tipo))}</b><small>${esc(S.since)} ${fmtDate(x.desde)}${status ? ` · ${status}` : ''}</small></span>
+        ${acoes ? `<span class="pi-acoes">${acoes}</span>` : ''}
+      </li>`;
+    };
+
     document.title = `${o.nome} · ${S.name}`;
     card.innerHTML = `
-      <div class="profile-cover">${coverPattern()}<span class="profile-number">${numero(o.id)}</span></div>
+      <div class="profile-cover">${coverPattern()}<span class="profile-number">${grupo.length > 1 ? qtdItens(grupo.length) : numero(o.id)}</span></div>
       <div class="profile-main">
-        <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo' + (anel && !venceu ? ' tempo-' + anel : ''))}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
+        <div class="profile-avatar">${avatarWithSelo(o, 'profile-photo' + (anel && noPoteAgora.length ? ' tempo-' + anel : ''))}<span class="profile-item" title="${esc(S.Item)} ${esc(typeLabel(o.tipo))}">${itemSvg(o.tipo, SIDE, Math.min(scaleOf(o), 1.2))}</span></div>
         <div class="profile-id">
           <h1>${esc(o.nome)}${nivelTag(SIDE, o.id)}</h1>
-          <p class="profile-meta">📍 ${esc(o.cidade)}/${esc(o.uf)} · ${esc(S.Item)} ${esc(typeLabel(o.tipo))}</p>
+          <p class="profile-meta"><span>📍 ${esc(o.cidade)}/${esc(o.uf)}</span><span>${S.emoji} ${qtdItens(grupo.length)} no pote</span></p>
         </div>
         <div class="profile-since">
           <small>${esc(S.cert_since)}</small>
-          <b>${fmtDate(o.desde)}</b>
+          <b>${fmtDate(antiga.desde)}</b>
         </div>
         <blockquote class="profile-quote">“${esc(o.frase)}”</blockquote>
         ${badges.length ? `<ul class="profile-badges">${badges.map(([k, t]) => `<li class="badge-${k}">${esc(t)}</li>`).join('')}</ul>` : ''}
         ${nivelCardHtml(o, isMine)}
-        ${isMine ? (venceu
-          ? `<div class="profile-validity is-expired">
-              <span>⏳ Sua ${S.item} venceu em <b>${fmtDate(vale)}</b> e saiu do pote.</span>
-              <span>Renovando agora ela volta, mas a data <b>recomeça</b>: “${esc(S.cert_since)} ${fmtDate(todayIso())}”.</span>
-              <button class="btn btn-gold btn-sm" type="button" data-renew="${o.id}">Voltar ao pote · ${preco}</button>
-            </div>`
-          : `<div class="profile-validity${faltam <= 30 ? ' is-soon' : ''}">
-              <span>Sua ${S.item} fica no pote até <b>${fmtDate(vale)}</b>${faltam <= 30 ? ` — <b>faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}</b>` : ''}.</span>
-              <span class="validity-bar"><i style="width:${Math.min(100, Math.max(3, (1 - faltam / 365) * 100)).toFixed(0)}%"></i></span>
-              <span class="validity-rule">Renovando antes de vencer, continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anel ? ` e com o anel de ${anel}` : ''}. Se vencer, a data recomeça do zero.</span>
-              ${faltam <= 30 ? nivelPerdaHtml(o) : ''}
-              <button class="btn btn-ghost btn-sm" type="button" data-renew="${o.id}">Renovar por +1 ano · ${preco}</button>
-            </div>`) : ''}
+        <div class="profile-itens">
+          <h3>${grupo.length > 1 ? `As ${S.items} de ${esc(quem)}` : `A ${S.item} de ${esc(quem)}`}</h3>
+          <ul id="profile-itens-lista">${pag.itens.map(itemHtml).join('')}</ul>
+          ${pag.mais ? '<button class="btn btn-ghost btn-sm btn-block" type="button" data-mais-itens>Carregar mais</button>' : ''}
+          ${isMine ? `<p class="validity-rule">Renovando antes de vencer, continua <b>“${esc(S.cert_since)} …”</b> com a mesma data${anel ? ` e o anel de ${anel}` : ''}. Se vencer, a data recomeça do zero.</p>` : ''}
+        </div>
         <div class="profile-actions">
-          <button class="btn btn-gold" type="button" data-view="${o.id}">Ver certificado</button>
+          ${isMine ? '<button class="btn btn-gold" type="button" data-editar-perfil>Editar perfil</button>' : ''}
           <button class="btn btn-ghost" type="button" data-share-profile>Compartilhar perfil</button>
           ${isMine ? `<button class="btn btn-ghost" type="button" data-open-buy>+ Mais ${S.items}</button>` : ''}
           ${isMine && DC.logado ? `<form class="profile-logout" method="post" action="sair">
@@ -2039,6 +2724,29 @@
         </div>
       </div>`;
 
+    // "Carregar mais": as próximas 5 azeitonas da pessoa, do servidor
+    $('[data-mais-itens]', card)?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Carregando…';
+      try {
+        const r = await apiMural('api/perfil', { acao: 'itens', lado: SIDE, id: DC.profileId, offset: pag.itens.length });
+        pag.itens.push(...r.itens);
+        pag.mais = r.mais;
+        $('#profile-itens-lista').insertAdjacentHTML('beforeend', r.itens.map(itemHtml).join(''));
+        if (r.mais) {
+          btn.disabled = false;
+          btn.textContent = 'Carregar mais';
+        } else {
+          btn.remove();
+        }
+      } catch (err) {
+        toast(err.message, 4000);
+        btn.disabled = false;
+        btn.textContent = 'Carregar mais';
+      }
+    });
+
     $('#profile-stats').innerHTML = [
       [S.emoji, likes, 'curtidas recebidas'],
       ['📝', posts.length, posts.length === 1 ? 'publicação' : 'publicações'],
@@ -2047,7 +2755,7 @@
       ['🗣️', made.length, 'comentários feitos'],
     ].map(([icon, n, label]) => `<div class="stat-card"><span>${icon}</span><b>${n.toLocaleString('pt-BR')}</b><small>${esc(label)}</small></div>`).join('');
 
-    // comentários que a pessoa fez (neste pote e no outro)
+    // comentários que a pessoa fez (neste pote e no outro): os 20 últimos
     $('#made-comments').innerHTML = made.length
       ? made.map((c) => {
         const ctx = postContext(c.post);
@@ -2061,36 +2769,84 @@
           ${c.texto ? `<p>${esc(c.texto)}</p>` : ''}${c.video ? `<span class="made-video">🎬 Respondeu com vídeo do ${providerName(c.video)}</span>` : ''}
         </article>`;
       }).join('')
-      : `<p class="comment-empty">${esc(o.nome.split(' ')[0])} ainda não comentou em nenhum post.</p>`;
+      : `<p class="comment-empty">${esc(quem)} ainda não comentou em nenhum post.</p>`;
 
     if (!posts.length) $('#feed').innerHTML = `<p class="comment-empty">Nenhuma publicação ainda.</p>`;
 
-    // no pote: destaca a azeitona/pimenta da pessoa
-    const inJar = $(`#jar-items .olive[data-id="${o.id}"]`);
-    if (inJar) {
-      inJar.classList.add('is-profile');
-      inJar.parentNode.parentNode.appendChild(inJar.parentNode); // traz para frente
-    }
-    $('#profile-jar-caption').textContent = inJar
-      ? `${S.Item} ${numero(o.id)} está brilhando no pote.`
-      : `${S.Item} ${numero(o.id)} está no fundo do pote (o vidro mostra as mais recentes).`;
+    // no pote: destaca as azeitonas/pimentas da pessoa
+    const noVidro = grupo.map((x) => $(`#jar-items .olive[data-id="${x.id}"]`)).filter(Boolean);
+    noVidro.forEach((el) => {
+      el.classList.add('is-profile');
+      el.parentNode.parentNode.appendChild(el.parentNode); // traz para frente
+    });
+    $('#profile-jar-caption').textContent = noVidro.length
+      ? (grupo.length > 1 ? `${noVidro.length === grupo.length ? 'As' : noVidro.length} ${S.items} de ${quem} estão brilhando no pote.` : `${S.Item} ${numero(o.id)} está brilhando no pote.`)
+      : `${grupo.length > 1 ? `As ${S.items}` : `${S.Item} ${numero(o.id)}`} de ${quem} ${grupo.length > 1 ? 'estão' : 'está'} no fundo do pote (o vidro mostra as mais recentes).`;
 
-    // só a própria pessoa vê: todos os itens dela nos dois potes
+    // só a própria pessoa vê: os perfis dela nos dois potes
     if (isMine) {
-      const all = Object.keys(DC.sides).flatMap((s) => store.get(`${s}_mine`, []).map((x) => ({ ...x, side: s })));
-      $('#my-items-section').hidden = false;
-      $('#my-items').innerHTML = all.map((x) => {
-        const sd = DC.sides[x.side];
-        return `<a class="my-item${x.side === SIDE && x.id === o.id ? ' current' : ''}" href="${profileUrl(x.side, x.id)}" style="${themeVars(sd)}">
-          ${itemSvg(x.tipo, x.side)}
-          <span><b>${esc(nomeProprio(x.nome))}</b><small>${esc(sd.Item)} ${esc(typeLabel(x.tipo, x.side))} · ${numero(x.id)}</small></span>
+      const lados = Object.keys(DC.sides).filter((s) => meusDe(s).length);
+      $('#my-items-section').hidden = lados.length < 2;
+      $('#my-items').innerHTML = lados.map((s) => {
+        const sd = DC.sides[s];
+        const seus = meusDe(s);
+        const x = seus[seus.length - 1];
+        return `<a class="my-item${s === SIDE ? ' current' : ''}" href="${profileUrl(s, x.id)}" style="${themeVars(sd)}">
+          ${itemSvg(x.tipo, s)}
+          <span><b>${esc(nomeProprio(x.nome))}</b><small>${qtdItens(seus.length, sd)} no pote ${esc(sd.name)}</small></span>
         </a>`;
       }).join('');
     }
   }
 
+  // certificado de uma azeitona (botão no próprio perfil; openCert só abre se for da pessoa)
+  document.addEventListener('click', (e) => {
+    const view = e.target.closest('[data-view]');
+    if (view) openCert(byId(Number(view.dataset.view)));
+  });
+
+  // ---------- editar o próprio perfil: foto (nos dois potes) e frase (neste pote) ----------
+  let fotoNova = null;
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-editar-perfil]')) return;
+    const eu = [...mine].sort((a, b) => (b.criado || 0) - (a.criado || 0))[0];
+    if (!eu) return;
+    fotoNova = null;
+    $('#perfil-foto-preview').innerHTML = eu.foto ? `<img src="${esc(eu.foto)}" alt="">` : initialsAvatar(eu, 'perfil-foto-ini');
+    $('#perfil-form').elements.frase.value = eu.frase;
+    openModal('#perfil-modal');
+  });
+  $('#perfil-foto')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast('Escolha um arquivo de imagem'); return; }
+    try {
+      fotoNova = await resizePhoto(file, 256);
+      $('#perfil-foto-preview').innerHTML = `<img src="${fotoNova}" alt="">`;
+    } catch {
+      toast('Não foi possível ler essa imagem');
+    }
+  });
+  $('#perfil-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('[type="submit"]');
+    btn.disabled = true;
+    try {
+      await apiMural('api/perfil', { lado: SIDE, foto: fotoNova, frase: e.target.elements.frase.value });
+      location.reload(); // tudo redesenhado com o que ficou salvo
+    } catch (err) {
+      toast(err.message, 4000);
+      btn.disabled = false;
+    }
+  });
+
   // ---------- renovação (mesma regra de renovar_item() no PHP) ----------
   // Em dia: +1 ano a partir do vencimento, mantendo o "desde". Vencido: recomeça hoje.
+  // O Pix fica aguardando no painel; a nova validade vale quando o pagamento for aprovado.
+  const renovado = (o) => (vencido(o)
+    ? { desde: todayIso(), valido_ate: addYear(todayIso()) }
+    : { desde: o.desde, valido_ate: addYear(validade(o)) });
+
   let renewing = null;
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-renew]');
@@ -2099,37 +2855,27 @@
     if (!o) return;
     renewing = o;
     const emDia = !vencido(o);
-    const novaValidade = emDia ? addYear(validade(o)) : addYear(todayIso());
+    const novaValidade = renovado(o).valido_ate;
     $('#renew-body').innerHTML = `
       <div class="renew-item">${itemSvg(o.tipo)}<span><b>${esc(o.nome)}</b><small>${esc(S.Item)} ${esc(typeLabel(o.tipo))} · ${numero(o.id)}</small></span></div>
       ${emDia
         ? `<p class="renew-ok">✓ Continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anelDe(o) ? ` e com o anel de ${anelDe(o)}` : ''}.<br>Nova validade: <b>${fmtDate(novaValidade)}</b>.</p>`
         : `<p class="renew-warn">⚠ Venceu em ${fmtDate(validade(o))}, então a data recomeça: <b>“${esc(S.cert_since)} ${fmtDate(todayIso())}”</b>.<br>Validade: <b>${fmtDate(novaValidade)}</b>.</p>`}`;
-    $('#renew-price').innerHTML = `${money(S.types[o.tipo].price)}<small>/ano</small>`;
-    renderFakeQr('#renew-qr');
+    const espera = PED.pendentes.find((p) => p.lado === SIDE && p.renova === o.id);
+    $('#renew-pix').innerHTML = o.pendente
+      ? `<p class="pix-aviso">⏳ O pagamento desta ${esc(S.item)} ainda está em confirmação. A renovação fica disponível depois.</p>`
+      : espera
+        ? `<p class="pix-aviso">Já existe uma renovação aguardando confirmação para esta ${esc(S.item)}.</p>${pixHtml(espera, false)}`
+        : pixDadosHtml(S.types[o.tipo].price);
     openModal('#renew-modal');
   });
 
-  $('#renew-pay')?.addEventListener('click', () => {
-    const o = renewing;
-    if (!o) return;
-    const manteve = !vencido(o);
-    if (manteve) {
-      o.valido_ate = addYear(validade(o));
-    } else {
-      o.desde = todayIso();
-      o.valido_ate = addYear(todayIso());
-    }
-    store.set(`${SIDE}_mine`, mine);
-    limparTempero(); // item vencido que volta ao pote devolve o nível
-    closeModals();
-    toast(manteve ? `Renovada! Continua desde ${fmtDate(o.desde)}.` : `De volta ao pote! Agora desde ${fmtDate(o.desde)}.`);
-    if ($('#jar')) renderJar();
-    updateStats();
-    renderFeed();
-    renderNewest();
-    renderMapa(); // item vencido que volta pinta o estado de novo
-    if (DC.profileId !== undefined) renderProfile();
+  $('#renew-pix')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!renewing) return;
+    const r = await gerarPix(e.target, { renovar: renewing.id });
+    if (!r) return;
+    $('#renew-pix').innerHTML = `${pixHtml(r.pedido, false)}<p class="pix-aviso">Assim que confirmarmos o pagamento, a nova validade passa a valer.</p>`;
   });
 
   document.addEventListener('click', async (e) => {
@@ -2179,6 +2925,9 @@
   renderNewest();
   renderMapa();
   garantirLinksLocais(); // links cifrados das compras feitas neste navegador
+  // pagamentos: o que o painel aprovou ou negou desde a última visita, e os que ainda aguardam
+  mostrarAvisos();
+  renderPedidosPendentes();
   // link para um estado: pote?c=…#mapa-SP (usado no "Chamar reforço")
   const hashUf = location.hash.match(/^#mapa-([A-Z]{2})$/);
   if (hashUf && $(`#mapa .uf[data-uf="${hashUf[1]}"]`)) {

@@ -20,6 +20,7 @@ $erros = [];
 $old = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok($_POST['csrf'] ?? null)) {
+        logar('aviso', 'painel', 'painel_csrf_invalido', 'Formulário do painel com token inválido/expirado', ['acao' => $_POST['acao'] ?? null]);
         flash('Sessão expirada. Tente de novo.', 'erro');
         header('Location: ' . $volta);
         exit;
@@ -31,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [$dados, $erros] = frase_validar($_POST);
                 if (!$erros) {
                     frase_salvar($dados, $id ?: null);
+                    logar('info', 'painel', $id ? 'frase_editada' : 'frase_criada', $dados['texto'] ?? '', ['id' => $id ?: null], null, true);
                     flash($id ? 'Frase atualizada.' : 'Frase adicionada! Já entra no sorteio.');
                     header('Location: ' . $volta);
                     exit;
@@ -39,16 +41,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             case 'alternar':
                 frase_alternar($id);
+                logar('info', 'painel', 'frase_alternada', "Frase #$id ligada/desligada", ['id' => $id], null, true);
                 flash('Pronto.');
                 header('Location: ' . $volta);
                 exit;
             case 'excluir':
                 frase_excluir($id);
+                logar('info', 'painel', 'frase_excluida', "Frase #$id excluída", ['id' => $id], null, true);
                 flash('Frase excluída.');
                 header('Location: ' . $volta);
                 exit;
         }
     } catch (PDOException $ex) {
+        logar('erro', 'painel', 'painel_erro_banco', $ex->getMessage(), ['id' => $id], null, true, 500);
         flash('Erro no banco: ' . $ex->getMessage(), 'erro');
         header('Location: ' . $volta);
         exit;
@@ -121,6 +126,9 @@ $contagem = array_count_values(array_column($lista, 'lugar'));
     <nav>
       <a href="./">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
+      <a href="pedidos">💰 Pagamentos</a>
+      <a href="logs">📜 Logs</a>
+      <a href="atualizar">🚀 Atualizar</a>
       <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
       <a href="../<?= e(url('pote', ['lado' => 'direita'])) ?>" target="_blank">🫒 Ver Direita</a>
     </nav>

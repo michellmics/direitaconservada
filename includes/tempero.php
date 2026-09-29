@@ -132,118 +132,67 @@ function tempero_meses_desde(?string $desde, ?string $hoje = null): int
 /** Fatos de uma pessoa num pote, direto do banco. */
 function tempero_fatos(int $usuarioId, string $lado): array
 {
-    $pdo = db();
-    $janela = 'NOW() - INTERVAL ' . (int) TEMPERO['janela_meses'] . ' MONTH';
-
-    $st = $pdo->prepare("SELECT COALESCE(SUM(t.preco_centavos), 0) / 100 AS reais, MIN(i.desde) AS desde
-                         FROM itens i JOIN item_tipos t ON t.id = i.item_tipo_id
-                         WHERE i.usuario_id = ? AND i.lado = ? AND i.status = 'ativo'");
-    $st->execute([$usuarioId, $lado]);
-    $compra = $st->fetch();
-
-    $st = $pdo->prepare("SELECT COUNT(*) FROM posts p JOIN itens i ON i.id = p.item_id
-                         WHERE i.usuario_id = ? AND i.lado = ? AND p.is_frase_compra = 0
-                           AND p.status = 'publicado' AND p.criado_em >= $janela");
-    $st->execute([$usuarioId, $lado]);
-    $posts = (int) $st->fetchColumn();
-
-    $st = $pdo->prepare("SELECT c.criado_em AS data, c.texto, c.video_id AS video
-                         FROM comentarios c JOIN itens i ON i.id = c.item_id
-                         WHERE i.usuario_id = ? AND i.lado = ? AND c.status = 'publicado' AND c.criado_em >= $janela");
-    $st->execute([$usuarioId, $lado]);
-    $comentarios = tempero_contar_comentarios($st->fetchAll());
-
-    // recebidos nos posts da pessoa (os que ela mesma escreveu não contam)
-    $st = $pdo->prepare("SELECT COALESCE(SUM(quem.lado = autor.lado), 0) AS mesmo, COALESCE(SUM(quem.lado <> autor.lado), 0) AS outro
-                         FROM comentarios c
-                         JOIN posts p     ON p.id = c.post_id AND p.status = 'publicado'
-                         JOIN itens autor ON autor.id = p.item_id
-                         JOIN itens quem  ON quem.id = c.item_id
-                         WHERE autor.usuario_id = ? AND autor.lado = ? AND quem.usuario_id <> autor.usuario_id
-                           AND c.status = 'publicado' AND c.criado_em >= $janela");
-    $st->execute([$usuarioId, $lado]);
-    $recebidos = $st->fetch();
-
-    $st = $pdo->prepare("SELECT COUNT(*) FROM curtidas cu
-                         JOIN posts p ON p.id = cu.post_id AND p.status = 'publicado'
-                         JOIN itens i ON i.id = p.item_id
-                         WHERE i.usuario_id = ? AND i.lado = ? AND cu.usuario_id <> ? AND cu.criado_em >= $janela");
-    $st->execute([$usuarioId, $lado, $usuarioId]);
-    $curtidas = (int) $st->fetchColumn();
-
-    return [
-        'reais'           => (float) $compra['reais'],
-        'meses'           => tempero_meses_desde($compra['desde']),
-        'posts'           => $posts,
-        'comentarios'     => $comentarios,
-        'recebidos'       => (int) $recebidos['mesmo'],
-        'recebidos_outro' => (int) $recebidos['outro'],
-        'curtidas'        => $curtidas,
-    ];
+    return tempero_fatos_varios($lado, [$usuarioId])[$usuarioId];
 }
 
 /**
- * Mesmos fatos a partir de data/mock.php, para os dois potes (vão para o JS em DC.tempero).
- * Retorna ['regras' => TEMPERO, 'fatos' => [lado => [dono => fatos]], 'donos' => [lado => [item => dono]]].
- * "dono" = id do 1º item da pessoa; só vão em 'donos' os itens de quem comprou mais de um.
+ * Fatos de várias pessoas num pote de uma vez (as mesmas consultas, com GROUP BY): [usuario_id => fatos].
+ * Presente dado e ainda não resgatado não conta para quem deu.
  */
-function tempero_mock(): array
+function tempero_fatos_varios(string $lado, array $usuarios): array
 {
-    $hoje = date('Y-m-d');
-    $items = $comments = $fatos = $donos = [];
-    foreach (array_keys(SIDES) as $lado) {
-        $items[$lado] = array_column(mock_items($lado), null, 'id');
-        $comments = array_merge($comments, mock_comments($lado, array_values($items[$lado])));
+    $ids = array_values(array_unique(array_map('intval', $usuarios)));
+    $vazio = ['reais' => 0.0, 'meses' => 0, 'posts' => 0, 'comentarios' => 0, 'recebidos' => 0, 'recebidos_outro' => 0, 'curtidas' => 0];
+    $out = array_fill_keys($ids, $vazio);
+    if (!$ids) {
+        return $out;
     }
-    $donoDe = fn(string $lado, int $id) => $items[$lado][$id]['dono'] ?? $id;
-    $vazio = ['reais' => 0, 'meses' => 0, 'posts' => 0, 'comentarios' => 0, 'recebidos' => 0, 'recebidos_outro' => 0, 'curtidas' => 0];
+    $in = implode(',', $ids);
+    $janela = 'NOW() - INTERVAL ' . (int) TEMPERO['janela_meses'] . ' MONTH';
+    $q = function (string $sql) use ($lado) {
+        $st = db()->prepare($sql);
+        $st->execute([$lado]);
+        return $st->fetchAll();
+    };
 
-    // compra, tempo e curtidas (a frase da compra é o post do item; as curtidas são dele)
-    $desde = [];
-    foreach ($items as $lado => $lista) {
-        foreach ($lista as $o) {
-            if (($o['valido_ate'] ?? $hoje) < $hoje) {
-                continue;
-            }
-            $d = $donoDe($lado, $o['id']);
-            $fatos[$lado][$d] ??= $vazio;
-            $fatos[$lado][$d]['reais'] += SIDES[$lado]['types'][$o['tipo']]['price'];
-            $fatos[$lado][$d]['curtidas'] += $o['likes'];
-            $desde[$lado][$d] = min($desde[$lado][$d] ?? $o['desde'], $o['desde']);
-            if ($d !== $o['id']) {
-                $donos[$lado][$o['id']] = $d;
-            }
-        }
-        foreach ($desde[$lado] ?? [] as $d => $data) {
-            $fatos[$lado][$d]['meses'] = tempero_meses_desde($data, $hoje);
-        }
+    foreach ($q("SELECT i.usuario_id AS u, COALESCE(SUM(t.preco_centavos), 0) / 100 AS reais, MIN(i.desde) AS desde
+                 FROM itens i JOIN item_tipos t ON t.id = i.item_tipo_id
+                 WHERE i.lado = ? AND i.usuario_id IN ($in) AND i.status = 'ativo' AND i.presente_token IS NULL
+                 GROUP BY i.usuario_id") as $r) {
+        $out[$r['u']]['reais'] = (float) $r['reais'];
+        $out[$r['u']]['meses'] = tempero_meses_desde($r['desde']);
     }
-
-    // comentários feitos (máx. por dia) e recebidos
-    $feitos = [];
-    foreach ($comments as $c) {
-        if (!empty($c['apagado'])) {
-            continue; // comentário apagado não conta
-        }
-        $a = $c['autor'];
-        $quem = $donoDe($a['side'], $a['id']);
-        $lado = explode('-', $c['post'], 2)[0];
-        $autor = $donoDe($lado, (int) $c['post_item']); // item dono do post (frase da compra ou outra publicação)
-        if ($a['side'] === $lado && $quem === $autor) {
-            continue; // comentou no próprio post
-        }
-        $feitos[$a['side']][$quem][] = $c;
-        if (isset($fatos[$lado][$autor])) {
-            $fatos[$lado][$autor][$a['side'] === $lado ? 'recebidos' : 'recebidos_outro']++;
-        }
+    foreach ($q("SELECT i.usuario_id AS u, COUNT(*) AS n FROM posts p JOIN itens i ON i.id = p.item_id
+                 WHERE i.lado = ? AND i.usuario_id IN ($in) AND p.is_frase_compra = 0
+                   AND p.status = 'publicado' AND p.criado_em >= $janela GROUP BY i.usuario_id") as $r) {
+        $out[$r['u']]['posts'] = (int) $r['n'];
     }
-    foreach ($feitos as $lado => $porDono) {
-        foreach ($porDono as $d => $lista) {
-            if (isset($fatos[$lado][$d])) {
-                $fatos[$lado][$d]['comentarios'] = tempero_contar_comentarios($lista);
-            }
-        }
+    $porPessoa = [];
+    foreach ($q("SELECT i.usuario_id AS u, c.criado_em AS data, c.texto, c.video_id AS video
+                 FROM comentarios c JOIN itens i ON i.id = c.item_id
+                 WHERE i.lado = ? AND i.usuario_id IN ($in) AND c.status = 'publicado' AND c.criado_em >= $janela") as $r) {
+        $porPessoa[$r['u']][] = $r;
     }
-
-    return ['regras' => TEMPERO, 'fatos' => $fatos, 'donos' => $donos];
+    foreach ($porPessoa as $u => $lista) {
+        $out[$u]['comentarios'] = tempero_contar_comentarios($lista);
+    }
+    // recebidos nos posts da pessoa (os que ela mesma escreveu não contam)
+    foreach ($q("SELECT autor.usuario_id AS u, COALESCE(SUM(quem.lado = autor.lado), 0) AS mesmo, COALESCE(SUM(quem.lado <> autor.lado), 0) AS outro
+                 FROM comentarios c
+                 JOIN posts p     ON p.id = c.post_id AND p.status = 'publicado'
+                 JOIN itens autor ON autor.id = p.item_id
+                 JOIN itens quem  ON quem.id = c.item_id
+                 WHERE autor.lado = ? AND autor.usuario_id IN ($in) AND quem.usuario_id <> autor.usuario_id
+                   AND c.status = 'publicado' AND c.criado_em >= $janela GROUP BY autor.usuario_id") as $r) {
+        $out[$r['u']]['recebidos'] = (int) $r['mesmo'];
+        $out[$r['u']]['recebidos_outro'] = (int) $r['outro'];
+    }
+    foreach ($q("SELECT i.usuario_id AS u, COUNT(*) AS n FROM curtidas cu
+                 JOIN posts p ON p.id = cu.post_id AND p.status = 'publicado'
+                 JOIN itens i ON i.id = p.item_id
+                 WHERE i.lado = ? AND i.usuario_id IN ($in) AND cu.usuario_id <> i.usuario_id AND cu.criado_em >= $janela
+                 GROUP BY i.usuario_id") as $r) {
+        $out[$r['u']]['curtidas'] = (int) $r['n'];
+    }
+    return $out;
 }

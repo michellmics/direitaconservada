@@ -12,7 +12,15 @@ $rotuloFora = ['RN' => [958, 256], 'PB' => [968, 296], 'PE' => [972, 336], 'AL' 
                'SE' => [938, 418], 'ES' => [856, 632], 'RJ' => [800, 730], 'DF' => [664, 500]];
 ?>
 <section class="section mapa-section" id="mapa">
-  <div class="section-head">
+  <div class="section-head mapa-head">
+    <button type="button" class="poll-share" data-mapa-share aria-label="Compartilhar o mapa" title="Compartilhar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>
+    </button>
+    <div class="poll-share-menu" id="mapa-share-menu" hidden>
+      <b>Baixar imagem do mapa</b>
+      <button type="button" class="btn btn-gold btn-sm" data-mapa-img="stories">📱 Stories (vertical)</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-mapa-img="whatsapp">💬 WhatsApp (paisagem)</button>
+    </div>
     <div>
       <span class="tag">Guerra dos potes <?= $esq['emoji'] ?> × <?= $dir['emoji'] ?></span>
       <h2><?= e($M['titulo']) ?></h2>

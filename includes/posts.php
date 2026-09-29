@@ -1,55 +1,61 @@
 <?php
-// Posts do mural, lidos no servidor: 12 por vez ("Carregar mais" busca os próximos 12 em /api/posts).
-// Por enquanto vêm de data/mock.php (a frase de cada item é o post dele); com o banco, troque o corpo destas
-// funções por consultas na tabela posts (status = 'publicado', item não vencido).
-// Espera config.php, data/mock.php e includes/comentarios.php carregados.
+// Posts do mural, direto do banco com SQL paginado: 12 por vez ("Carregar mais" busca os próximos em /api/posts).
+// Frases das compras + publicações, de itens ativos (e os pendentes de quem vê). Publicar: api/posts (acao "publicar").
+// Espera config.php e data/mock.php (banco_dados.php) carregados.
 
 const POSTS_POR_PAGINA = 12;
 const POSTS_ORDENS = ['recentes', 'top', 'debate'];
-
-/** Todos os posts de um pote (do banco; sem banco, a frase de cada item no pote), no formato do JS. */
-function posts_do_lado(string $lado): array
-{
-    if (($doBanco = banco_posts($lado)) !== null) {
-        return $doBanco;
-    }
-    $hoje = date('Y-m-d');
-    $out = [];
-    foreach (mock_items($lado) as $o) {
-        if (($o['valido_ate'] ?? $hoje) < $hoje) {
-            continue;
-        }
-        $out[] = [
-            'id'      => "$lado-o{$o['id']}",
-            'oliveId' => $o['id'],
-            'text'    => $o['frase'],
-            'date'    => $o['desde'],
-            'likes'   => $o['likes'],
-            'video'   => $o['video'] ?? null,
-        ];
-    }
-    return $out;
-}
+const PERFIL_MAX_POSTS = 20; // no perfil: só as últimas 20 publicações da pessoa
 
 /**
- * Uma página de posts: $offset = quantos já foram mostrados. $perfil = só os posts desse item (página de perfil).
- * Ordens: recentes (data), top (curtidas), debate (comentários). Retorna ['posts' => [...], 'mais' => bool].
+ * Uma página de posts: $offset = quantos já foram mostrados. $perfil = números das azeitonas da pessoa (página de perfil:
+ * os posts de todas elas, no máximo PERFIL_MAX_POSTS).
+ * Ordens: recentes (data), top (curtidas), debate (comentários).
+ * Retorna ['posts' => [...], 'mais' => bool, 'contagem' => [id do post => ['total', 'visitantes']]] — a contagem de
+ * comentários só dos posts desta página (o botão 💬).
  */
-function posts_pagina(string $lado, string $ordem = 'recentes', int $offset = 0, ?int $perfil = null, int $limite = POSTS_POR_PAGINA): array
+function posts_pagina(string $lado, string $ordem = 'recentes', int $offset = 0, ?array $perfil = null, int $limite = POSTS_POR_PAGINA): array
 {
-    $lista = posts_do_lado($lado);
-    if ($perfil) {
-        $lista = array_values(array_filter($lista, fn($p) => $p['oliveId'] === $perfil));
-    }
-    $recente = fn($a, $b) => [$b['hora'] ?? $b['date'], $b['oliveId']] <=> [$a['hora'] ?? $a['date'], $a['oliveId']];
-    if ($ordem === 'top') {
-        usort($lista, fn($a, $b) => ($b['likes'] <=> $a['likes']) ?: $recente($a, $b));
-    } elseif ($ordem === 'debate') {
-        $cont = comentarios_contagem($lado);
-        usort($lista, fn($a, $b) => (($cont[$b['id']]['total'] ?? 0) <=> ($cont[$a['id']]['total'] ?? 0)) ?: $recente($a, $b));
-    } else {
-        usort($lista, $recente);
-    }
+    $vazio = ['posts' => [], 'mais' => false, 'contagem' => []];
     $offset = max(0, $offset);
-    return ['posts' => array_slice($lista, $offset, $limite), 'mais' => $offset + $limite < count($lista)];
+    if ($perfil !== null) {
+        $perfil = array_values(array_filter(array_map('intval', $perfil)));
+        $limite = min($limite, PERFIL_MAX_POSTS - $offset);
+        if (!$perfil || $limite <= 0) {
+            return $vazio;
+        }
+    }
+    if (!banco_ativo()) {
+        return $vazio;
+    }
+    $viewer = banco_viewer();
+    // comentário conta se quem comentou está no pote (ou é a própria pessoa, com item pendente)
+    $visivel = "(q.status IN ('ativo', 'vencido') OR (q.status = 'pendente' AND q.usuario_id = $viewer))";
+    $ordemSql = [
+        'top'    => 'p.curtidas_count DESC, p.criado_em DESC, i.numero DESC',
+        'debate' => 'n_total DESC, p.criado_em DESC, i.numero DESC',
+    ][$ordem] ?? 'p.criado_em DESC, i.numero DESC';
+    $st = db()->prepare("SELECT p.id AS post_id, p.is_frase_compra, p.texto, p.video_provider, p.video_id, p.video_vertical,
+                                p.curtidas_count, p.criado_em, i.numero,
+                                (SELECT COUNT(*) FROM comentarios c JOIN itens q ON q.id = c.item_id
+                                  WHERE c.post_id = p.id AND c.status = 'publicado' AND $visivel) AS n_total,
+                                (SELECT COUNT(*) FROM comentarios c JOIN itens q ON q.id = c.item_id
+                                  WHERE c.post_id = p.id AND c.status = 'publicado' AND $visivel AND q.lado <> p.lado) AS n_visitantes
+                         FROM posts p JOIN itens i ON i.id = p.item_id
+                          AND (i.status = 'ativo' OR (i.status = 'pendente' AND i.usuario_id = ?))
+                         WHERE p.lado = ? AND p.status = 'publicado'"
+                         . ($perfil ? ' AND i.numero IN (' . implode(',', $perfil) . ')' : '') . "
+                         ORDER BY $ordemSql LIMIT " . ($limite + 1) . " OFFSET $offset");
+    $st->execute([$viewer, $lado]);
+    $rows = $st->fetchAll();
+    $out = $vazio;
+    $out['mais'] = count($rows) > $limite;
+    foreach (array_slice($rows, 0, $limite) as $r) {
+        $p = banco_post_js($lado, $r);
+        $out['posts'][] = $p;
+        if ($r['n_total']) {
+            $out['contagem'][$p['id']] = ['total' => (int) $r['n_total'], 'visitantes' => (int) $r['n_visitantes']];
+        }
+    }
+    return $out;
 }

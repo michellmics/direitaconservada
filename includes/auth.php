@@ -68,6 +68,7 @@ function current_user(): ?array
         db()->prepare('UPDATE sessoes SET ultimo_acesso_em = NOW() WHERE id = ?')->execute([$u['sessao_id']]);
     }
     unset($u['senha_hash']);
+    log_usuario((int) $u['id']); // os logs desta requisição saem com quem está logado
     return $cache = $u;
 }
 
@@ -88,6 +89,7 @@ function encerrar_sessao(): void
             db()->prepare('DELETE FROM sessoes WHERE token_hash = ?')->execute([hash('sha256', $token)]);
         } catch (PDOException $e) {
         }
+        logar('info', 'conta', 'logout', 'Saiu da conta');
     }
     set_cookie(SESSAO_COOKIE, '', time() - 3600);
 }
@@ -109,14 +111,17 @@ function pedir_link(string $email, string $nome, ?string $redirecionar): array
         $nome = nome_proprio($nome !== '' ? $nome : preg_replace('/[._\-+\d]+/', ' ', strstr($email, '@', true)));
         $pdo->prepare('INSERT INTO usuarios (nome, email) VALUES (?, ?)')->execute([mb_substr($nome ?: 'Visitante', 0, 80), $email]);
         $u = ['id' => (int) $pdo->lastInsertId(), 'nome' => $nome, 'email' => $email, 'status' => 'ativo'];
+        logar('info', 'conta', 'conta_criada', "Conta criada ao pedir link: $email", ['origem' => 'entrar'], $u['id']);
     }
     if ($u['status'] !== 'ativo') {
+        logar('seguranca', 'conta', 'link_login_bloqueado', "Conta bloqueada pediu link: $email", [], (int) $u['id']);
         return ['erro' => 'bloqueado'];
     }
 
     $st = $pdo->prepare('SELECT COUNT(*) FROM login_tokens WHERE usuario_id = ? AND criado_em > NOW() - INTERVAL ' . LINK_JANELA_MIN . ' MINUTE');
     $st->execute([$u['id']]);
     if ((int) $st->fetchColumn() >= LINK_LIMITE) {
+        logar('aviso', 'conta', 'link_login_limite', "Links demais pedidos para $email", [], (int) $u['id']);
         return ['erro' => 'Você já pediu vários links agora há pouco. Confira seu e-mail (e o spam) ou espere alguns minutos.'];
     }
 
@@ -124,6 +129,7 @@ function pedir_link(string $email, string $nome, ?string $redirecionar): array
     $pdo->prepare("INSERT INTO login_tokens (usuario_id, token_hash, finalidade, redirecionar, expira_em)
                    VALUES (?, ?, 'login', ?, NOW() + INTERVAL " . LINK_MINUTOS . ' MINUTE)')
         ->execute([$u['id'], hash('sha256', $token), $redirecionar]);
+    logar('info', 'conta', 'link_login_pedido', "Link de acesso gerado para $email", ['voltar' => $redirecionar], (int) $u['id']);
     return ['token' => $token, 'usuario' => $u];
 }
 
@@ -145,26 +151,29 @@ function usar_link(string $token): ?string
 {
     $link = ver_link($token);
     if (!$link) {
+        logar('seguranca', 'conta', 'login_falha', 'Link de acesso inválido, usado ou vencido', [], null, false, 401);
         return null;
     }
     // só um clique ganha, mesmo com dois ao mesmo tempo
     $st = db()->prepare('UPDATE login_tokens SET usado_em = NOW() WHERE id = ? AND usado_em IS NULL');
     $st->execute([$link['id']]);
     if ($st->rowCount() !== 1) {
+        logar('seguranca', 'conta', 'login_falha', 'Link de acesso usado duas vezes ao mesmo tempo', [], (int) $link['usuario_id'], false, 401);
         return null;
     }
     db()->prepare('UPDATE usuarios SET email_verificado_em = COALESCE(email_verificado_em, NOW()) WHERE id = ?')
         ->execute([$link['usuario_id']]);
     iniciar_sessao((int) $link['usuario_id']);
+    logar('seguranca', 'conta', 'login_ok', 'Entrou pelo link de acesso: ' . $link['email'], [], (int) $link['usuario_id'], false, 200);
     return destino_seguro($link['redirecionar']);
 }
 
 // Só deixa voltar para páginas do próprio site (nada de redirecionar para fora):
-// "./", "pote?c=…", "perfil?c=…" (parâmetros cifrados, ver includes/rotas.php), com âncora opcional
+// "./", "pote?c=…", "perfil?c=…", "presente?c=…" (parâmetros cifrados, ver includes/rotas.php), com âncora opcional
 function destino_seguro(?string $r): string
 {
     $r = (string) $r;
-    return preg_match('/^(\.\/|pote|perfil)(\?c=[A-Za-z0-9_-]+)?(#[\w-]*)?$/', $r) ? $r : './';
+    return preg_match('/^(\.\/|pote|perfil|presente)(\?c=[A-Za-z0-9_-]+)?(#[\w-]*)?$/', $r) ? $r : './';
 }
 
 // ---------- CSRF (cookie + campo escondido) ----------

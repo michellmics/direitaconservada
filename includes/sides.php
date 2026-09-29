@@ -25,7 +25,7 @@ const SIDES = [
         'react'      => 'azeitonam',            // "os outros leem e azeitonam"
         'sort_top'   => 'Mais azeitonadas',
         'tag'        => 'Em salmoura desde sempre',
-        'h1'         => 'Canhoto aqui,<br>só o do <em>cheque</em>.',
+        'h1'         => 'Sem Caroço,<br>mas com <em>cérebro</em>.',
         // texto do topo da página ({preco} = o tipo mais barato)
         'lead'       => 'Enquanto a petralhada faz assembleia para decidir o sabor do pastel, você garante sua azeitona no <b>maior pote conservador do Brasil</b>. Deixa sua frase gravada para o canhoto chorar e ainda solta o verbo no mural. Não deixa comunista do Leblon ocupar o seu lugar: <b>a partir de {preco}</b>, menos que um pastel na feira.',
         'og'         => 'Valores não têm prazo de validade. Garanta sua azeitona no pote.',
@@ -37,10 +37,15 @@ const SIDES = [
         'mural_about' => 'ideias, opiniões, notícias e vídeos sobre a direita',
         // mapa da guerra dos potes (partials/mapa.php): o mesmo mapa nos dois lados, textos daqui.
         // {meus}/{deles} = estados de cada lado · {dif} = vantagem · {falta} {itens} = quantos faltam · {uf} = estado
+        // apoio partidário (partials/partidos.php): só partidos de direita neste pote
+        'partidos' => [
+            'titulo' => 'Qual partido conserva o seu voto?',
+            'sub'    => 'Escolha até 3. O ranking muda na hora, e o pão com mortadela vai espiar.',
+        ],
         'mapa' => [
             'cor'          => '#8fa532',  // cor dos estados conquistados (igual nos dois potes)
-            'titulo'       => 'O Brasil em conserva ou na mão da petralhada?',
-            'ganhando'     => 'A azeitona já conserva {meus} estados. A petralhada vai pedir recontagem e botar a culpa no imperialismo.',
+            'titulo'       => 'O Brasil em conserva ou na mão da da esquerda?',
+            'ganhando'     => 'A azeitona já conserva {meus} estados. Os comuna vão pedir recontagem e botar a culpa no imperialismo.',
             'perdendo'     => 'A petralhada tomou {deles} estados. Vai deixar o churrasco da família virar sarau de comunista do Leblon?',
             'empate'       => 'Empate: {meus} a {deles}. O canhoto já convocou assembleia para decidir quem ganhou.',
             'estado_meu'   => 'Conservado. Vantagem de {dif}: canhoto aqui, só o do talão de cheque.',
@@ -48,7 +53,7 @@ const SIDES = [
             'estado_empate' => 'Empatado. Uma azeitona decide se o estado vira conserva ou diretório acadêmico.',
             'estado_vazio' => 'Terra de ninguém. Finque a azeitona antes que a canhotada ocupe e chame de reforma agrária.',
             'fio_sub'      => 'Onde falta pouco para tirar o estado das mãos da canhotada.',
-            'indicar'      => '🫒 A petralhada está avançando em {uf}! Garanta sua azeitona antes que o estado vire filial do Leblon: ',
+            'indicar'      => '🫒 A esquerda está avançando em {uf}! Garanta sua azeitona antes que o estado vire filial do Leblon: ',
             // quem manda no estado (👑). Sem valores em R$: {falta} = itens para tomar a coroa (ex.: "3 azeitonas Verde")
             'rei_eu'       => 'A coroa é sua. Fica de olho: comunista de iPhone adora dividir o que é dos outros.',
             'rei_time'     => 'É do time, mas coroa não é herança: com mais {falta} aqui, ela é sua.',
@@ -137,7 +142,7 @@ const SIDES = [
         'react'      => 'apimentam',
         'sort_top'   => 'Mais apimentadas',
         'tag'        => 'Ardendo desde sempre',
-        'h1'         => 'Não se conserva.<br><em>Resiste</em>.',
+        'h1'         => 'Coxinha aqui,<br>só na <em>festa</em>.',
         'lead'       => 'Enquanto o tio do pavê manda áudio de 12 minutos no grupo da família, você garante sua pimenta no <b>pote mais ardido do Brasil</b>. Deixa sua frase gravada para o coxinha engasgar e ainda solta o verbo no mural. Não deixa o tio do zap dominar o pedaço: <b>a partir de {preco}</b>, mais barato que a coxinha dele.',
         'og'         => 'Não se conserva. Resiste. Garanta sua pimenta no pote.',
         'label_top'  => '★ ARDE SEMPRE ★',
@@ -146,6 +151,11 @@ const SIDES = [
         'mural_tag'  => 'Mural da resistência',
         'success'    => 'Você entrou na resistência! 🌶️',
         'mural_about' => 'ideias, opiniões, notícias e vídeos sobre a esquerda',
+        // apoio partidário (partials/partidos.php): só partidos de esquerda neste pote
+        'partidos' => [
+            'titulo' => 'Qual partido faz a sua pimenta arder?',
+            'sub'    => 'Escolha até 3. O ranking muda na hora, e o tio do pavê vai ficar sabendo.',
+        ],
         'mapa' => [
             'cor'          => '#e0402a',
             'titulo'       => 'O Brasil arde ou vira grupo do tio do zap?',

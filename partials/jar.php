@@ -84,7 +84,8 @@ $longName = mb_strlen($S['name_b']) > 11;
       foreach ($visible as $i => $it):
           $pos = jar_position($i, $L);
           $scale = ($S['scales'][$it['tipo']] ?? 1) * $L['itemScale']; ?>
-        <g transform="translate(<?= round($pos['x'], 1) ?> <?= round($pos['y'], 1) ?>) scale(<?= $scale ?>)"><g transform="rotate(<?= round($pos['r']) ?>)"><?= $S['shapes'][$it['tipo']] ?></g></g>
+        <?php // .agito = chacoalhão (pote-agito.js) · .flutua = boiando devagar (CSS), cada um no seu ritmo ?>
+        <g transform="translate(<?= round($pos['x'], 1) ?> <?= round($pos['y'], 1) ?>) scale(<?= $scale ?>)"><g class="agito"><g class="flutua" style="--fd:<?= round(4 + jar_rand($i * 13) * 3, 2) ?>s;--fa:-<?= round(jar_rand($i * 17) * 6, 2) ?>s"><g transform="rotate(<?= round($pos['r']) ?>)"><?= $S['shapes'][$it['tipo']] ?></g></g></g></g>
       <?php endforeach; ?>
     </g>
     <?php if ($S['brine']): ?>

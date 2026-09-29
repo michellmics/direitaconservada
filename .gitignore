@@ -3,5 +3,12 @@
 # credenciais
 .env
 
-# dependências (composer install)
-/vendor/
+# dependências: a vendor/ VAI para o git (a hospedagem cPanel não tem composer; o botão Atualizar leva junto).
+# Para atualizar: composer install --prefer-dist --no-dev (sem --prefer-dist vem a pasta .git dos pacotes)
+
+# fotos e selos enviados nas compras
+/uploads/
+
+# estado da atualização pelo painel (cozinha/atualizar)
+/data/deploy.json
+/data/deploy.lock

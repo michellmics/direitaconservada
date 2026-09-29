@@ -69,8 +69,45 @@ foreach (array_keys(SIDES) as $lado) {
         $insPost->execute([$lado, $itemId, $o['frase'], $v['provider'] ?? null, $v['id'] ?? null, (int) ($v['vertical'] ?? 0), 1, $criado]);
         $posts[] = ['db' => (int) $pdo->lastInsertId(), 'lado' => $lado, 'item' => $itemId, 'criado' => $criado, 'frase' => true];
     }
+    $usuariosDoLado[$lado] = array_values($donos);
     $pdo->prepare('UPDATE potes SET proximo_numero = (SELECT COALESCE(MAX(numero), 0) + 1 FROM itens WHERE lado = ?) WHERE slug = ?')->execute([$lado, $lado]);
     echo "$lado: " . count($donos) . ' cadastros, ' . count($itens[$lado]) . " itens.\n";
+}
+
+// ---------- 2b. apoio partidário: cada cadastro apoia 1 a 3 partidos DO SEU LADO (pimenta = esquerda, azeitona = direita) ----------
+// Pesos para o ranking parecer real (os maiores partidos de cada lado na frente). Precisa da migration 009.
+$pesos = [
+    'PT' => 30, 'PSOL' => 18, 'PSB' => 9, 'PDT' => 8, 'PCdoB' => 8, 'REDE' => 5, 'PV' => 5, 'PCB' => 3, 'UP' => 2, 'PSTU' => 2,
+    'PL' => 32, 'MISSÃO' => 16, 'NOVO' => 18, 'REPUBLICANOS' => 10, 'PP' => 9, 'UNIÃO' => 8, 'PSD' => 6, 'MDB' => 6, 'PODEMOS' => 5, 'PSDB' => 4, 'PRD' => 2,
+];
+try {
+    $insApoio = $pdo->prepare('INSERT INTO apoios_partido (usuario_id, sigla, criado_em) VALUES (?, ?, NOW() - INTERVAL ? MINUTE)');
+    $totalApoios = 0;
+    foreach ($usuariosDoLado as $lado => $ids) {
+        $st = $pdo->prepare('SELECT sigla FROM partidos WHERE lado = ? AND ativo = 1');
+        $st->execute([$lado]);
+        $doLado = array_intersect_key($pesos, array_flip($st->fetchAll(PDO::FETCH_COLUMN)));
+        foreach ($ids as $u) {
+            $escolhas = [];
+            $quantos = [1, 1, 2, 2, 2, 3][mt_rand(0, 5)];
+            while (count($escolhas) < min($quantos, count($doLado))) {
+                $sorteio = mt_rand(1, array_sum($doLado));
+                foreach ($doLado as $sigla => $peso) {
+                    if (($sorteio -= $peso) <= 0) {
+                        $escolhas[$sigla] = true;
+                        break;
+                    }
+                }
+            }
+            foreach (array_keys($escolhas) as $sigla) {
+                $insApoio->execute([$u, $sigla, mt_rand(1, 60 * 24 * 30)]);
+                $totalApoios++;
+            }
+        }
+    }
+    echo "$totalApoios apoios partidários.\n";
+} catch (PDOException $e) {
+    echo "(apoio partidário pulado: rode php database/migrate.php para criar as tabelas)\n";
 }
 
 // ---------- 3. publicações no mural (além da frase da compra) ----------

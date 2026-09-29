@@ -110,6 +110,14 @@ function links_para_js(string $lado, array $items, array $comments, array $extra
     foreach ($extra['otherItems'] ?? [] as $o) {
         $add($o['side'], $o['id']);
     }
+    foreach ($extra['presentes'] ?? [] as $o) { // presentes que quem está vendo deu (perfil próprio)
+        $add($o['side'], $o['id']);
+    }
+    foreach ($extra['meus'] ?? [] as $s => $lista) { // os itens de quem está vendo, nos dois potes
+        foreach ($lista as $o) {
+            $add($s, $o['id']);
+        }
+    }
     foreach ($extra['mapa']['reis'] ?? [] as $s => $porUf) {
         foreach ($porUf as $lista) {
             foreach ($lista as $r) {

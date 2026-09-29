@@ -23,6 +23,7 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <script src="assets/js/pote-agito.js" defer></script>
 </head>
 <body class="lado-<?= $S['slug'] ?>">
   <?php require __DIR__ . '/../partials/sprites.php'; ?>
@@ -33,6 +34,7 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
       <summary aria-label="Menu"><span></span><span></span><span></span></summary>
       <div class="topo-menu-box">
         <a href="<?= $home ?>#pote">O Pote</a>
+        <a href="<?= $home ?>#mural">Mural</a>
         <a href="<?= $home ?>#como">Como funciona</a>
       </div>
     </details>
@@ -42,18 +44,12 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
     </a>
     <nav>
       <a href="<?= $home ?>#pote">O Pote</a>
+      <a href="<?= $home ?>#mural">Mural</a>
       <a href="<?= $home ?>#como">Como funciona</a>
     </nav>
     <a class="side-switch" href="<?= e(url('pote', ['lado' => $O['slug']])) ?>" style="<?= theme_vars($O) ?>" title="Ir para <?= e($O['name']) ?>">
       <?= item_svg($O, $O['logo'], 'side-switch-icon') ?><span>Espiar o outro pote</span>
     </a>
-    <?php // no celular estreito vira "Quero 🌶️" para caber tudo numa linha
-    $quero = '<span class="quero-longo">Quero minha ' . e($S['item']) . '</span><span class="quero-curto" aria-hidden="true">Quero ' . $S['emoji'] . '</span>'; ?>
-    <?php if ($comCompra): ?>
-      <button class="btn btn-gold btn-sm" data-open-buy><?= $quero ?></button>
-    <?php else: ?>
-      <a class="btn btn-gold btn-sm" href="<?= e(url('pote', ['lado' => $S['slug']])) ?>"><?= $quero ?></a>
-    <?php endif; ?>
     <?php // canto direito: "Entrar" ou, logado, "Meu perfil" (menu com o perfil e o Sair) ?>
     <?php if ($U): ?>
       <details class="topo-menu user-menu">

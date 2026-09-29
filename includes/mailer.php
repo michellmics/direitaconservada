@@ -31,7 +31,7 @@ function mailer(): PHPMailer
     }
     $m->CharSet    = PHPMailer::CHARSET_UTF8;
     $m->Timeout    = 15;
-    $m->setFrom((string) env('ENV_SMTP_USER'), (string) env('MAIL_FROM_NAME', 'Direita Conservada × Pimenta da Resistência'));
+    $m->setFrom((string) env('ENV_SMTP_USER'), (string) env('MAIL_FROM_NAME', SITE_NAME));
     return $m;
 }
 
@@ -59,9 +59,10 @@ function enviar_email(string $para, string $nome, string $assunto, string $html,
         $m->Body    = $html;
         $m->AltBody = $texto;
         $m->send();
+        logar('info', 'email', 'email_enviado', "E-mail para $para: $assunto");
         return null;
     } catch (MailException $e) {
-        error_log('[email] falha ao enviar para ' . $para . ': ' . $e->getMessage());
+        logar('erro', 'email', 'email_falha', "Falha ao enviar para $para: " . $e->getMessage(), ['assunto' => $assunto]);
         return $e->getMessage();
     }
 }

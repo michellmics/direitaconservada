@@ -11,8 +11,16 @@ function env_file_vars(): array
         return $vars;
     }
     $vars = [];
-    $file = dirname(__DIR__) . '/.env';
-    if (!is_readable($file)) {
+    // 1º fora da pasta do site (no cPanel: /home/USUARIO/.env, acima da public_html — o navegador não alcança);
+    // 2º na raiz do projeto (desenvolvimento). O primeiro que existir vale.
+    $file = null;
+    foreach ([dirname(__DIR__, 2) . '/.env', dirname(__DIR__) . '/.env'] as $opcao) {
+        if (is_readable($opcao)) {
+            $file = $opcao;
+            break;
+        }
+    }
+    if ($file === null) {
         return $vars;
     }
     foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {

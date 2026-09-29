@@ -1,6 +1,6 @@
 <?php
 // Configurações gerais do site
-const SITE_NAME = 'Direita Conservada × Pimenta da Resistência';
+const SITE_NAME = 'PotePolitico.com.br';
 
 date_default_timezone_set('America/Sao_Paulo');
 
@@ -14,6 +14,7 @@ const JAR_CAPACITY = 50000;
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
+require __DIR__ . '/log.php'; // logar() e os erros do PHP na tabela logs
 require __DIR__ . '/sides.php';
 require __DIR__ . '/rotas.php'; // url() e rota_params(): rotas sem .php e parâmetros cifrados
 

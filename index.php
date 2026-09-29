@@ -2,20 +2,23 @@
 // Entrada: a pessoa escolhe o lado e cai num dos potes
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/data/mock.php';
+require __DIR__ . '/includes/tempero.php';
+require __DIR__ . '/includes/pote_js.php';
 
 $order = ['esquerda', 'direita']; // esquerda à esquerda, direita à direita
 $count = [];
 foreach ($order as $slug) {
-    $count[$slug] = count(mock_items($slug));
+  $count[$slug] = pote_totais($slug)['total'];
 }
 $total = array_sum($count);
 ?>
 <!doctype html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Escolha seu pote</title>
+  <title>Escolha seu pote · <?= e(SITE_NAME) ?></title>
   <meta name="description" content="Direita Conservada ou Pimenta da Resistência? Escolha seu pote, garanta seu lugar e debata com o outro lado.">
   <meta property="og:title" content="<?= e(SITE_NAME) ?>">
   <meta property="og:description" content="Escolha seu pote: azeitona conservada ou pimenta da resistência.">
@@ -25,7 +28,9 @@ $total = array_sum($count);
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <script src="assets/js/pote-agito.js" defer></script>
 </head>
+
 <body class="choose-page">
   <?php require __DIR__ . '/partials/sprites.php'; ?>
 
@@ -33,15 +38,15 @@ $total = array_sum($count);
     <header class="choose-head">
       <span class="tag">Dois potes, um debate</span>
       <h1>Escolha seu pote</h1>
-      <p>Petralha zoa a azeitona, tio do pavê xinga a pimenta. E o grupo da família não sobrevive.</p>
+      <p>Esquerdista zoa a azeitona, tio do zap infarta com a pimenta e o grupo da família vira terra arrasada.</p>
       <?php require_once __DIR__ . '/includes/frases.php';
       if ($fraseEntrada = frase('entrada', null)): ?><p class="piada entrada-piada">“<?= e($fraseEntrada) ?>”</p><?php endif; ?>
     </header>
 
     <div class="choose-sides">
       <?php foreach ($order as $slug):
-          $S = side($slug);
-          $jarItems = array_slice(mock_items($slug), 0, 110); ?>
+        $S = side($slug);
+        $jarItems = pote_itens_sql($slug, '1', [], 'ORDER BY i.numero LIMIT 110'); ?>
         <a class="side-card side-<?= $slug ?>" href="<?= e(url('pote', ['lado' => $slug])) ?>" style="<?= theme_vars($S) ?>">
           <div class="side-jar"><?php require __DIR__ . '/partials/jar.php'; ?></div>
           <div class="side-info">
@@ -68,7 +73,8 @@ $total = array_sum($count);
   </main>
 
   <footer class="footer">
-    <p>Protótipo visual — nenhum pagamento é real.</p>
+    <p>© <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
   </footer>
 </body>
+
 </html>
