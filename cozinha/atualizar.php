@@ -56,6 +56,7 @@ $curto = fn(?string $sha) => $sha ? substr($sha, 0, 7) : '—';
     <a class="brand" href="./"><span>🚀 Painel <b>Atualizar</b></span></a>
     <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
     <nav id="adm-nav">
+      <a href="visitas">📊 Visitas</a>
       <a href="enquetes">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
       <a href="pedidos">💰 Pagamentos</a>

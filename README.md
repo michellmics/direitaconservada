@@ -104,6 +104,14 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
   erro, segurança. Guardados por 180 dias.
 - Consultar em **`/cozinha/logs`**: mais recentes primeiro, 50 por página, filtros e atalhos (logins do painel, segurança, erros).
 
+## Contador de visitas (migration 024)
+
+- `assets/js/visitas.js` (em todas as páginas públicas) → `api/visita.php`: conta cada página vista na tabela `visitas`
+  e manda um "ainda estou aqui" a cada 30 s para `visitas_online`. Visitante = cookie anônimo `dc_vid` (no banco, só o hash).
+  Robôs e o navegador com o painel aberto não contam.
+- Consultar em **`/cozinha/visitas`**: online agora (ao vivo), hoje × ontem, período × período anterior, tendência
+  semanal, gráficos por dia, mês (com projeção) e hora, mapa de calor dia × hora, páginas, origens e aparelhos.
+
 ## Alertas para o administrador (migration 020)
 
 - Destinatários em `ENV_EMAIL_ALERTAS` (separados por vírgula). `includes/alertas.php`.

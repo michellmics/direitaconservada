@@ -122,6 +122,7 @@ $atalhos = [
     <a class="brand" href="./"><span>📜 Painel <b>Logs</b></span></a>
     <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
     <nav id="adm-nav">
+      <a href="visitas">📊 Visitas</a>
       <a href="enquetes">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
       <a href="pedidos">💰 Pagamentos</a>

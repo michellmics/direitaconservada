@@ -28,6 +28,7 @@ $total = array_sum($count);
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<?= asset('assets/css/style.css') ?>">
   <script src="<?= asset('assets/js/pote-agito.js') ?>" defer></script>
+  <script src="<?= asset('assets/js/visitas.js') ?>" defer></script>
 </head>
 
 <body class="choose-page">
