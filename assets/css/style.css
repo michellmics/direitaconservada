@@ -122,6 +122,18 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 }
 .agito-sensor.is-on { border-style: solid; background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .agito-dica { text-align: center; margin: 8px 0 0; font-size: .78rem; color: var(--muted); }
+/* app instalado: puxar para atualizar (assets/js/puxar.js) */
+.puxar-bola {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 8px); left: 50%; z-index: 9999; pointer-events: none;
+  width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+  background: #f4ecd8; color: #1a140e; font: 700 1.35rem/1 system-ui, sans-serif;
+  box-shadow: 0 6px 18px rgba(0,0,0,.45); opacity: 0; transform: translate(-50%, -50px);
+}
+.puxar-bola.animar { transition: transform .25s ease, opacity .25s ease; }
+.puxar-bola.pronto { background: #e7c54d; }
+.puxar-bola span { display: block; }
+.puxar-bola.girando span { animation: pote-giro .7s linear infinite; }
+
 /* embaixo do pote: convite pra treta no WhatsApp */
 .btn-whats {
   display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; margin: 14px auto 0;

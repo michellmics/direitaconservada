@@ -186,6 +186,7 @@ function pwa_tags_admin(): string
         '<meta name="mobile-web-app-capable" content="yes">',
         '<meta name="apple-mobile-web-app-title" content="Cozinha">',
         '<meta name="apple-mobile-web-app-status-bar-style" content="black">',
+        '<script src="../' . asset('assets/js/puxar.js') . '" defer></script>',
     ]);
 }
 
@@ -202,5 +203,6 @@ function pwa_tags(): string
         '<meta name="apple-mobile-web-app-title" content="Pote Político">',
         '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">',
         '<script src="' . asset('assets/js/pwa.js') . '" defer></script>',
+        '<script src="' . asset('assets/js/puxar.js') . '" defer></script>', // puxar para atualizar (só no app)
     ]);
 }
