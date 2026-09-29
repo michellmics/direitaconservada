@@ -170,6 +170,25 @@ function asset(string $caminho): string
     return $caminho . (is_file($arq) ? '?v=' . filemtime($arq) : '');
 }
 
+/**
+ * App do painel (PWA "Cozinha", páginas em /cozinha/): manifest e ícones próprios, em outro tom, para diferenciar
+ * do app do site no celular. O service worker (cozinha/sw.js) é registrado pelo assets/js/admin.js.
+ */
+function pwa_tags_admin(): string
+{
+    return implode("\n  ", [
+        '<link rel="manifest" href="manifest.webmanifest">',
+        '<meta name="theme-color" content="#121212">',
+        '<link rel="icon" type="image/png" sizes="32x32" href="../' . asset('assets/img/admin/favicon-32.png') . '">',
+        '<link rel="icon" type="image/png" sizes="192x192" href="../' . asset('assets/img/admin/icon-192.png') . '">',
+        '<link rel="apple-touch-icon" href="../' . asset('assets/img/admin/apple-touch-icon.png') . '">',
+        '<meta name="apple-mobile-web-app-capable" content="yes">',
+        '<meta name="mobile-web-app-capable" content="yes">',
+        '<meta name="apple-mobile-web-app-title" content="Cozinha">',
+        '<meta name="apple-mobile-web-app-status-bar-style" content="black">',
+    ]);
+}
+
 /** App (PWA): manifest, ícones (PC, Android e iPhone), tags da Apple e o script que registra o service worker. */
 function pwa_tags(): string
 {

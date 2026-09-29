@@ -38,6 +38,28 @@
     sync();
   }
 
+  // app do painel (PWA "Cozinha"): service worker próprio, com escopo /cozinha/
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => {}));
+  }
+
+  // menu sanduíche (celular): abre/fecha a lista de páginas; fecha ao escolher, ao tocar fora ou com Esc
+  const topo = document.querySelector('.adm-topbar');
+  const menuBtn = topo?.querySelector('[data-adm-menu]');
+  if (menuBtn) {
+    const abrir = (sim) => {
+      topo.classList.toggle('menu-aberto', sim);
+      menuBtn.setAttribute('aria-expanded', String(sim));
+      menuBtn.setAttribute('aria-label', sim ? 'Fechar menu' : 'Abrir menu');
+    };
+    menuBtn.addEventListener('click', () => abrir(!topo.classList.contains('menu-aberto')));
+    document.addEventListener('click', (e) => {
+      if (!topo.classList.contains('menu-aberto')) return;
+      if (e.target.closest('#adm-nav a') || !topo.contains(e.target)) abrir(false);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') abrir(false); });
+  }
+
   document.addEventListener('submit', (e) => {
     const msg = e.target.dataset.confirm;
     if (msg && !window.confirm(msg)) e.preventDefault();

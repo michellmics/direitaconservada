@@ -127,6 +127,7 @@ function cartao_pedido(array $p, bool $acoes): string
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="refresh" content="60">
   <title><?= $g['pendentes'] ? '(' . count($g['pendentes']) . ') ' : '' ?>Painel · Pagamentos</title>
+  <?= pwa_tags_admin() ?>
   <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💰</text></svg>') ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -136,7 +137,8 @@ function cartao_pedido(array $p, bool $acoes): string
 <body class="admin-page">
   <header class="topbar adm-topbar">
     <a class="brand" href="./"><span>💰 Painel <b>Pagamentos</b></span></a>
-    <nav>
+    <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
+    <nav id="adm-nav">
       <a href="./">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
       <a href="pedidos">💰 Pagamentos</a>

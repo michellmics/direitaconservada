@@ -1078,6 +1078,34 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .adm-pedido-itens b { color: var(--text); }
 .adm-pedido-itens q { display: block; font-style: italic; }
 @media (max-width: 640px) { .adm-row { grid-template-columns: 1fr; } .adm-topbar nav { display: none; } }
+/* painel no celular: menu sanduíche (o botão abre a lista de páginas logo abaixo do topo) */
+.adm-menu-btn { display: none; }
+@media (max-width: 900px) { /* mesmo corte em que o .topbar nav some */
+  .adm-topbar { gap: 10px; }
+  .adm-topbar .brand { margin-right: auto; min-width: 0; font-size: 1.1rem; }
+  .adm-menu-btn {
+    order: 3; display: grid; place-items: center; flex: none; width: 42px; height: 42px; padding: 0;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; color: var(--text); cursor: pointer;
+  }
+  .adm-menu-btn span, .adm-menu-btn span::before, .adm-menu-btn span::after {
+    display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .25s, background .25s;
+  }
+  .adm-menu-btn span { position: relative; }
+  .adm-menu-btn span::before, .adm-menu-btn span::after { content: ""; position: absolute; left: 0; }
+  .adm-menu-btn span::before { top: -6px; }
+  .adm-menu-btn span::after { top: 6px; }
+  .adm-topbar.menu-aberto .adm-menu-btn span { background: transparent; }
+  .adm-topbar.menu-aberto .adm-menu-btn span::before { transform: translateY(6px) rotate(45deg); }
+  .adm-topbar.menu-aberto .adm-menu-btn span::after { transform: translateY(-6px) rotate(-45deg); }
+  .adm-topbar.menu-aberto nav {
+    display: flex; flex-direction: column; gap: 0; position: absolute; top: 100%; left: 0; right: 0; margin: 0;
+    padding: 6px 16px 12px; background: var(--bg-2); border-bottom: 1px solid var(--line);
+    box-shadow: 0 18px 40px -12px rgba(0,0,0,.7); animation: adm-menu-abre .2s ease-out;
+  }
+  .adm-topbar.menu-aberto nav a { padding: 14px 4px; font-size: 1.05rem; color: var(--text); border-bottom: 1px solid var(--line); }
+  .adm-topbar.menu-aberto nav a:last-child { border-bottom: 0; }
+}
+@keyframes adm-menu-abre { from { opacity: 0; transform: translateY(-8px); } }
 
 /* ---------- responsivo ---------- */
 @media (max-width: 1100px) {

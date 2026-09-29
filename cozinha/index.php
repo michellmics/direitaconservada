@@ -161,6 +161,7 @@ while (count($opcoesForm) < 2) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Painel · Enquetes</title>
+  <?= pwa_tags_admin() ?>
   <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🗳️</text></svg>') ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -170,7 +171,8 @@ while (count($opcoesForm) < 2) {
 <body class="admin-page">
   <header class="topbar adm-topbar">
     <a class="brand" href="./"><span>🗳️ Painel <b>Enquetes</b></span></a>
-    <nav>
+    <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
+    <nav id="adm-nav">
       <?php if ($logado): ?><a href="frases">💬 Frases</a> <a href="pedidos">💰 Pagamentos</a>
       <a href="logs">📜 Logs</a>
       <a href="atualizar">🚀 Atualizar</a><?php endif; ?>
