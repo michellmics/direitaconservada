@@ -75,6 +75,27 @@ $total = array_sum($count);
     <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
     <p>© <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
   </footer>
+  <script>
+    // Feedback ao escolher o pote: o card escolhido "mergulha", o outro some e o botão mostra "Entrando…"
+    (() => {
+      const lados = document.querySelector('.choose-sides');
+      document.querySelectorAll('.side-card').forEach((card) => {
+        card.addEventListener('click', (e) => {
+          if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.button > 0) return;
+          if (lados.classList.contains('entrando')) { e.preventDefault(); return; }
+          lados.classList.add('entrando');
+          card.classList.add('escolhido');
+          const btn = card.querySelector('.btn');
+          if (btn) btn.innerHTML = '<i class="spin" aria-hidden="true"></i> Entrando no pote…';
+        });
+      });
+      // voltar pelo navegador (cache de página) não pode deixar a tela "presa" na animação
+      window.addEventListener('pageshow', (e) => {
+        if (!e.persisted) return;
+        location.reload();
+      });
+    })();
+  </script>
 </body>
 
 </html>

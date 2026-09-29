@@ -438,6 +438,19 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .side-count { color: var(--muted); font-size: .9rem; }
 .side-count b { color: var(--text); font-size: 1.1rem; }
 .side-card .btn { margin-top: 6px; }
+/* clicou em entrar: o escolhido cresce e brilha, o outro lado e o VS somem */
+.choose-sides.entrando { pointer-events: none; }
+.choose-sides.entrando .side-card:not(.escolhido) { opacity: 0; transform: scale(.92); filter: blur(3px); transition: opacity .4s, transform .4s, filter .4s; }
+.choose-sides.entrando .versus { opacity: 0; transform: translate(-50%, -50%) scale(.3) rotate(-90deg); transition: opacity .3s, transform .3s; }
+.side-card.escolhido { transform: scale(1.04); border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold), 0 30px 80px -10px var(--gold); animation: pote-pulso 1.2s ease-in-out infinite; }
+.side-card.escolhido .side-jar .jar { animation: pote-entrar 1s ease-in-out infinite; }
+.side-card .btn .spin { display: inline-block; width: 1em; height: 1em; margin-right: .4em; vertical-align: -.15em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: pote-giro .7s linear infinite; }
+@keyframes pote-pulso { 50% { box-shadow: 0 0 0 6px var(--gold), 0 30px 90px -5px var(--gold); } }
+@keyframes pote-entrar { 0%, 100% { transform: rotate(0) scale(1.03); } 25% { transform: rotate(-6deg) scale(1.08); } 75% { transform: rotate(6deg) scale(1.08); } }
+@keyframes pote-giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .side-card.escolhido, .side-card.escolhido .side-jar .jar { animation: none; }
+}
 .versus {
   position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
   width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
