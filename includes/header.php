@@ -37,7 +37,8 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
         <a href="<?= $home ?>#como">Como funciona</a>
       </div>
     </details>
-    <a class="brand" href="./" title="Trocar de pote">
+    <?php // o nome leva ao início do pote atual; trocar de pote fica no rodapé ("Trocar de pote") ?>
+    <a class="brand" href="<?= e(url('pote', ['lado' => $S['slug']])) ?>" title="Início do pote <?= e($S['name']) ?>">
       <?= item_svg($S, $S['logo'], 'brand-icon') ?>
       <span><?= e($S['name_a']) ?> <b><?= e($S['name_b']) ?></b></span>
     </a>
