@@ -2,7 +2,7 @@
 // Presente: /presente?c=… (token cifrado). Quem abre vê a azeitona/pimenta e toca em "Resgatar":
 //   logado          → passa para a conta e vai para o perfil
 //   e-mail novo     → a conta nasce, já entra e resgata
-//   e-mail com conta → recebe o link de acesso e volta para cá (aí é só tocar em "Resgatar")
+//   e-mail com conta → recebe o código de acesso, digita em /entrar e volta para cá (aí é só tocar em "Resgatar")
 require __DIR__ . '/includes/config.php';
 require __DIR__ . '/includes/auth.php';
 require __DIR__ . '/includes/presentes.php';
@@ -11,8 +11,6 @@ require __DIR__ . '/includes/limite.php';
 $P = rota_params();
 $token = (string) ($P['t'] ?? '');
 $erro = null;
-$tela = 'presente';
-$aviso = null;
 $p = null;
 
 try {
@@ -26,9 +24,9 @@ try {
     } else {
       $voltar = url('presente', ['t' => $token]);
       $u = pedido_usuario($U0, (string) ($_POST['email'] ?? ''), (string) $p['nome'], $p['lado'], $voltar, 'toque em “Resgatar”');
-      if (isset($u['login'])) {
-        $tela = 'link';
-        $aviso = $u['login'];
+      if (isset($u['entrar'])) { // e-mail com conta: vai digitar o código e volta para cá
+        header('Location: ' . $u['entrar']);
+        exit;
       } elseif (isset($u['erro'])) {
         $erro = $u['erro'];
       } else {
@@ -74,9 +72,7 @@ require __DIR__ . '/includes/header.php';
       <p class="presente-meta"><?= e($S['Item']) ?> <?= e($p['tipo_nome']) ?> · #<?= str_pad((string) $p['numero'], 4, '0', STR_PAD_LEFT) ?> · <?= e(nome_proprio($p['cidade'])) ?>/<?= e($p['uf']) ?></p>
       <blockquote class="presente-frase">“<?= e($p['frase']) ?>”</blockquote>
 
-      <?php if ($tela === 'link'): ?>
-        <p class="pix-aviso">📧 <?= e($aviso) ?></p>
-      <?php elseif ($daPessoa): ?>
+      <?php if ($daPessoa): ?>
         <p>Esse é o presente que você deu. Mande o link para a pessoa: quem abrir primeiro e tocar em “Resgatar” fica com ele.</p>
         <a class="btn btn-gold btn-block" href="https://wa.me/?text=<?= rawurlencode('Te dei ' . ($S['item'] === 'pimenta' ? 'uma pimenta' : 'uma azeitona') . ' no pote ' . $S['name'] . '! ' . $S['emoji'] . ' Resgate aqui: ' . url_absoluta('presente', ['t' => $token])) ?>" target="_blank" rel="noopener">Mandar no WhatsApp</a>
       <?php elseif ($p['status'] !== 'ativo'): ?>

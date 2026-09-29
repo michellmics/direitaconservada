@@ -2,7 +2,7 @@
 // Pedidos pagos por Pix sem gateway (tabelas pedidos, pedido_itens e itens; migrations 012 e 013).
 //
 //   1. A pessoa monta o pedido e informa o nome do titular da conta que vai pagar. Sem login: e-mail novo cria a
-//      conta e já entra; e-mail que já tem conta recebe o link mágico (ninguém entra na conta dos outros).
+//      conta e já entra; e-mail que já tem conta recebe o código de acesso (ninguém entra na conta dos outros).
 //   2. Na hora nascem os itens com status 'pendente' (e a frase no mural): só a dona vê, até o painel aprovar.
 //   3. O administrador confere o extrato em /cozinha/pedidos:
 //        aprovar → itens 'ativo' (para todo mundo, 1 ano a partir de hoje) ou a renovação é aplicada;
@@ -109,7 +109,8 @@ function pedido_apagar_imagem(?string $caminho): void
 
 /**
  * Quem está comprando: o usuário logado; sem login, pelo e-mail.
- * E-mail novo → cria a conta e já entra. E-mail que já tem conta → manda o link mágico (retorna 'login').
+ * E-mail novo → cria a conta e já entra. E-mail que já tem conta → manda o código de acesso
+ * (retorna 'login' = mensagem e 'entrar' = tela para digitar o código, que depois volta para $voltar).
  */
 function pedido_usuario(?array $logado, string $email, string $nome, string $lado, ?string $voltar = null,
                         string $depois = 'faça a compra (o carrinho continua aqui)'): array
@@ -125,19 +126,23 @@ function pedido_usuario(?array $logado, string $email, string $nome, string $lad
     $st = $pdo->prepare('SELECT id FROM usuarios WHERE email = ?');
     $st->execute([$email]);
     if ($st->fetchColumn()) {
-        $res = pedir_link($email, '', $voltar ?? url('pote', ['lado' => $lado]));
-        if (isset($res['token'])) {
+        $voltar = destino_seguro($voltar ?? url('pote', ['lado' => $lado]));
+        $res = pedir_codigo($email, '', $voltar);
+        if (isset($res['codigo'])) {
             require_once __DIR__ . '/mailer.php';
             $S = side($lado);
             $nomeConta = nome_proprio($res['usuario']['nome']);
-            [$assunto, $html, $texto] = email_link_login($S, $nomeConta, url_absoluta('entrar', ['token' => $res['token'], 'lado' => $lado]));
+            [$assunto, $html, $texto] = email_codigo_login($S, $nomeConta, $res['codigo']);
             if (enviar_email($email, $nomeConta, $assunto, $html, $texto) !== null) {
-                return ['erro' => 'Esse e-mail já tem conta, mas não conseguimos enviar o link de acesso agora. Tente de novo em instantes.'];
+                return ['erro' => 'Esse e-mail já tem conta, mas não conseguimos enviar o código de acesso agora. Tente de novo em instantes.'];
             }
         } elseif (($res['erro'] ?? '') !== 'bloqueado') { // bloqueado: não revela, responde igual
             return ['erro' => $res['erro']];
         }
-        return ['login' => "Esse e-mail já tem conta. Enviamos um link de acesso para $email: abra, entre e $depois."];
+        return [
+            'login'  => "Esse e-mail já tem conta. Enviamos um código de acesso para $email: digite o código, entre e $depois.",
+            'entrar' => url('entrar', ['lado' => $lado, 'r' => $voltar, 'email' => $email]),
+        ];
     }
     $pdo->prepare('INSERT INTO usuarios (nome, email) VALUES (?, ?)')->execute([mb_substr($nome, 0, 80), $email]);
     $id = (int) $pdo->lastInsertId();

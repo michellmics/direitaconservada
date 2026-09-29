@@ -73,7 +73,7 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 - Na compra, a pessoa informa o **nome do titular da conta que vai pagar**; o site gera o Pix copia e cola + QR com o
   valor exato, direto para a sua chave (`includes/pix.php`).
 - **Conta:** sem login, ela digita o e-mail. E-mail novo → a conta nasce e ela já entra. E-mail que já tem conta → recebe
-  o link mágico (ninguém entra na conta dos outros digitando o e-mail deles).
+  um código de acesso por e-mail (ninguém entra na conta dos outros digitando o e-mail deles).
 - **A compra é o cadastro:** na próxima, nome, cidade/UF, foto, selo e frase vêm da última compra ("Alterar" / "Para outra pessoa").
 - Os itens nascem no banco como **`pendente`** (migration 013): só a dona vê, e pode publicar e comentar com eles. A cobrança
   fica em "Pagamento aguardando confirmação" (no pote e no perfil), com o botão "Ver Pix".
@@ -92,7 +92,7 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 - **Editar perfil** (`/api/perfil`): foto (vale nos dois potes) e frase (vale no pote; troca também a frase no mural).
 - **🎁 Presente:** na compra, "É presente" (ou o botão no cartão do cadastro). Depois do pagamento aprovado, quem comprou
   vê em "Presentes para entregar" o link com botão do WhatsApp. Quem abre `/presente?c=…` e toca em "Resgatar" (entrando
-  com o e-mail: novo cria a conta, existente recebe o link de acesso) vira dona: a azeitona vai para a conta dela.
+  com o e-mail: novo cria a conta, existente recebe o código de acesso) vira dona: a azeitona vai para a conta dela.
   Até o resgate, o presente é uma pessoa à parte no pote (não entra no perfil, no nível nem no cadastro de quem deu).
   `includes/presentes.php`; colunas `itens.presente_token`, `presente_de`, `presente_resgatado_em`.
 
@@ -104,15 +104,33 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
   erro, segurança. Guardados por 180 dias.
 - Consultar em **`/cozinha/logs`**: mais recentes primeiro, 50 por página, filtros e atalhos (logins do painel, segurança, erros).
 
-## Login (link mágico por e-mail)
+## Alertas para o administrador (migration 020)
+
+- Destinatários em `ENV_EMAIL_ALERTAS` (separados por vírgula). `includes/alertas.php`.
+- **Abriu o QR Code para compra** (ao gerar o pedido e em cada "Ver Pix") e **copiou o código Pix**: e-mail com cliente,
+  e-mail, titular, itens, valor, horários, histórico da pessoa e IP/aparelho. Mesmo evento do mesmo pedido: no máximo
+  1 e-mail a cada 5 minutos (as repetições são contadas).
+- **Cron do cPanel a cada 15 min** chamando `/cron/alertas?chave=<ENV_CRON_CHAVE>` (ou `php cron/alertas.php`), migration 021:
+  - pedido pendente há mais de 15 min e pedido que expirou (1 e-mail por pedido); expira os vencidos;
+  - painel (entrou, senha errada, IP bloqueado, cron com chave errada), erros do sistema (agrupados) e moderação
+    (rate limit estourado, quem publica/comenta demais em 15 min, denúncias novas) — lidos da tabela `logs`;
+  - presentes pagos há 3+ dias sem resgate (repete a cada 7 dias);
+  - resumo diário a partir das 8h (vendas, conversão, faturamento do mês, contas, mural, vencimentos, saúde);
+    `?resumo=1` manda na hora;
+  - banco fora do ar: e-mail direto, no máximo 1 por hora.
+- **Clientes** (`includes/vencimentos.php`): "sua azeitona vence em X dias" 30, 15, 10, 5 e 1 dia(s) antes, das 9h às 20h,
+  com o botão para renovar no perfil. Não avisa presente não resgatado nem item com renovação já aguardando pagamento.
+
+## Login (código por e-mail, migration 019)
 
 - O PHPMailer fica em `vendor/`, que vai para o git (o cPanel não tem composer). Para atualizar: `composer install --prefer-dist --no-dev`.
-- Configure no `.env`: `APP_URL` (endereço público do site — vai no link do e-mail) e `ENV_SMTP_HOST/PORT/USER/PASS`.
-- `/entrar`: a pessoa digita o e-mail e recebe um link (vale 20 min, uso único). Abrir o link mostra o botão
-  "Entrar" — assim os filtros de e-mail que abrem links sozinhos não gastam o acesso.
+- Configure no `.env`: `APP_URL` (endereço público do site), `ENV_KEY` e `ENV_SMTP_HOST/PORT/USER/PASS`.
+- `/entrar`: a pessoa digita o e-mail, recebe um **código de 6 dígitos** (vale 15 min, uso único) e digita o código na
+  mesma página. Pedir um código novo invalida o anterior; 5 códigos errados e ele deixa de valer. No banco fica só o
+  HMAC do código (com a `ENV_KEY`).
 - Sessão de 30 dias (tabela `sessoes`), renovada enquanto a pessoa usa o site. Sair: `/sair` (POST).
 - **Enquetes: só vota quem está logado**, um voto por pessoa (em qualquer aparelho).
-- Limite: 3 links por e-mail a cada 15 minutos.
+- Limite: 3 códigos por e-mail a cada 15 minutos (e 10 tentativas por minuto por IP).
 
 > Antivírus com "proteção de e-mail" (ex.: Norton Mail Shield) interceptam o SMTP com certificado próprio e o PHP
 > recusa a conexão. Em produção isso não acontece; localmente, desative a verificação de e-mail do antivírus para o PHP

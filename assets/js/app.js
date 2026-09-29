@@ -866,6 +866,13 @@
     return json;
   }
 
+  // avisa o administrador (abriu o QR Code / copiou o código Pix); falhar aqui não atrapalha a compra
+  function avisarPix(codigo, evento) {
+    if (!codigo) return;
+    fetch('api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+      body: JSON.stringify({ acao: 'evento', codigo, evento }) }).catch(() => {});
+  }
+
   // antes do código: e-mail (quem não entrou na conta) e o nome do titular da conta que vai pagar
   function pixDadosHtml(total) {
     return `<form class="pix-dados">
@@ -888,7 +895,7 @@
           <button class="btn btn-ghost btn-sm" type="button" data-copiar-pix>Copiar código Pix</button>
         </div>
       </div>
-      <label class="field pix-code"><span>Pix copia e cola</span><textarea readonly rows="3">${esc(srv.copiaCola)}</textarea></label>
+      <label class="field pix-code"><span>Pix copia e cola</span><textarea readonly rows="3" data-pedido="${esc(srv.codigo)}">${esc(srv.copiaCola)}</textarea></label>
       <p class="pix-aviso">Conferimos o pagamento em poucos minutos.${comBotao ? ` Sua ${esc(sd.item)} já está no pote para você; para os outros, aparece assim que confirmarmos.` : ''} Se o pagamento não for encontrado, o pedido é cancelado.</p>
       ${comBotao ? '<button class="btn btn-gold btn-block" type="button" data-ja-paguei>Já paguei</button>' : ''}`;
   }
@@ -897,11 +904,20 @@
     const btn = e.target.closest('[data-copiar-pix]');
     if (!btn) return;
     const area = btn.closest('.pix-area').querySelector('.pix-code textarea');
+    copiandoPix = true;
     try { await navigator.clipboard.writeText(area.value); } catch { area.select(); document.execCommand('copy'); }
+    copiandoPix = false;
+    avisarPix(area.dataset.pedido, 'copiou');
     toast('Código Pix copiado! Cole no app do seu banco, em Pix copia e cola.');
   });
+  // copiou selecionando o texto do copia e cola (sem o botão)
+  let copiandoPix = false;
+  document.addEventListener('copy', (e) => {
+    const area = e.target.closest?.('.pix-code textarea');
+    if (area && !copiandoPix) avisarPix(area.dataset.pedido, 'copiou');
+  });
 
-  // envia o pedido. E-mail novo: a conta nasce e a pessoa já entra. E-mail que já tem conta: vai o link de acesso.
+  // envia o pedido. E-mail novo: a conta nasce e a pessoa já entra. E-mail que já tem conta: vai o código de acesso.
   async function gerarPix(form, dados) {
     const btn = form.querySelector('[type="submit"]');
     const f = new FormData(form);
@@ -911,8 +927,9 @@
     btn.textContent = 'Gerando…';
     try {
       const r = await apiPedido({ acao: 'criar', lado: SIDE, titular, email: email || undefined, ...dados });
-      if (r.login) { // o carrinho continua aqui: depois de entrar pelo link, é só continuar
-        form.innerHTML = `<p class="pix-aviso">📧 ${esc(r.login)}</p>`;
+      if (r.login) { // o carrinho continua nesta aba: o código é digitado em outra e depois é só continuar aqui
+        form.innerHTML = `<p class="pix-aviso">📧 ${esc(r.login)}</p>`
+          + (r.entrar ? `<a class="btn btn-gold btn-block" href="${esc(r.entrar)}" target="_blank" rel="noopener">Digitar o código</a>` : '');
         return null;
       }
       if (r.entrou) DC.logado = true;
@@ -1041,6 +1058,7 @@
     if (!p) return;
     $('#pix-modal-body').innerHTML = `<p class="muted small">${esc(descricaoPedido(p))}</p>${pixHtml(p, false)}`;
     openModal('#pix-modal');
+    avisarPix(p.codigo, 'qr');
   });
 
   // o que o painel resolveu desde a última visita (o servidor manda cada aviso uma vez só)
@@ -2855,6 +2873,7 @@
         ? `<p class="pix-aviso">Já existe uma renovação aguardando confirmação para esta ${esc(S.item)}.</p>${pixHtml(espera, false)}`
         : pixDadosHtml(S.types[o.tipo].price);
     openModal('#renew-modal');
+    if (!o.pendente && espera) avisarPix(espera.codigo, 'qr');
   });
 
   $('#renew-pix')?.addEventListener('submit', async (e) => {

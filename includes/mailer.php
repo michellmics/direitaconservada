@@ -106,22 +106,20 @@ function email_botao(array $S, string $link, string $texto): string
         . ';color:' . $t['on-accent'] . ';text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:999px;">' . e($texto) . '</a></p>';
 }
 
-// E-mail do link mágico
-function email_link_login(array $S, string $nome, string $link): array
+// E-mail do código de acesso (6 dígitos, digitado em /entrar)
+function email_codigo_login(array $S, string $nome, string $codigo): array
 {
     $t = $S['theme'];
     $primeiro = e(explode(' ', $nome)[0]);
-    $min = LINK_MINUTOS;
-    $linkHtml = e($link);
+    $min = CODIGO_MINUTOS;
     $corpo = "<p style=\"margin:0 0 12px;\">Olá, {$primeiro}!</p>
-          <p style=\"margin:0 0 20px;\">Clique no botão para entrar. Não precisa de senha.</p>
-          " . email_botao($S, $link, 'Entrar no site') . "
-          <p style=\"margin:0 0 8px;font-size:13px;color:#6b6a55;\">O link vale por {$min} minutos e só pode ser usado uma vez.</p>
-          <p style=\"margin:0 0 8px;font-size:13px;color:#6b6a55;\">Se o botão não funcionar, copie e cole no navegador:<br><span style=\"word-break:break-all;color:{$t['dark']};\">{$linkHtml}</span></p>
-          <p style=\"margin:16px 0 0;font-size:13px;color:#6b6a55;\">Não pediu? É só ignorar este e-mail — ninguém entra sem clicar no link.</p>";
-    $html = email_moldura($S, $S['emoji'], 'Seu link para entrar', $corpo);
-    $texto = "Olá, {$primeiro}!\n\nPara entrar em {$S['name']}, abra o link abaixo (vale por {$min} minutos, uso único):\n\n{$link}\n\nNão pediu? É só ignorar este e-mail.";
-    return [$S['emoji'] . ' Seu link para entrar', $html, $texto];
+          <p style=\"margin:0 0 20px;\">Digite este código no site para entrar. Não precisa de senha.</p>
+          <p style=\"margin:0 0 24px;text-align:center;\"><span style=\"display:inline-block;background:#fff;border:2px dashed {$t['gold']};border-radius:14px;padding:14px 22px;font-family:'Courier New',monospace;font-size:34px;font-weight:bold;letter-spacing:.3em;color:{$t['ink']};\">{$codigo}</span></p>
+          <p style=\"margin:0 0 8px;font-size:13px;color:#6b6a55;\">O código vale por {$min} minutos e só pode ser usado uma vez.</p>
+          <p style=\"margin:16px 0 0;font-size:13px;color:#6b6a55;\">Não pediu? É só ignorar este e-mail. Não passe este código para ninguém.</p>";
+    $html = email_moldura($S, $S['emoji'], 'Seu código para entrar', $corpo);
+    $texto = "Olá, {$primeiro}!\n\nSeu código para entrar em {$S['name']}: {$codigo}\n\nVale por {$min} minutos, uso único.\n\nNão pediu? É só ignorar este e-mail. Não passe este código para ninguém.";
+    return [$S['emoji'] . " {$codigo} é seu código para entrar", $html, $texto];
 }
 
 /**

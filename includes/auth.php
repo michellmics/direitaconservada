@@ -1,13 +1,14 @@
 <?php
-// Login por link mágico: pedido do link, confirmação, sessão de 30 dias e CSRF dos formulários.
-// Tabelas: usuarios, login_tokens, sessoes (migrations 001 e 003).
+// Login por código de 6 dígitos enviado por e-mail, sessão de 30 dias e CSRF dos formulários.
+// Tabelas: usuarios, login_tokens, sessoes (migrations 001, 003 e 019).
 require_once __DIR__ . '/db.php';
 
-const SESSAO_COOKIE    = 'dc_sessao';
-const SESSAO_DIAS      = 30;
-const LINK_MINUTOS     = 20;
-const LINK_LIMITE      = 3;   // links por e-mail…
-const LINK_JANELA_MIN  = 15;  // …a cada 15 minutos
+const SESSAO_COOKIE     = 'dc_sessao';
+const SESSAO_DIAS       = 30;
+const CODIGO_MINUTOS    = 15;
+const CODIGO_TENTATIVAS = 5;   // códigos errados antes de o código morrer
+const LINK_LIMITE       = 3;   // códigos por e-mail…
+const LINK_JANELA_MIN   = 15;  // …a cada 15 minutos
 
 function https(): bool
 {
@@ -94,13 +95,19 @@ function encerrar_sessao(): void
     set_cookie(SESSAO_COOKIE, '', time() - 3600);
 }
 
-// ---------- link mágico ----------
+// ---------- código por e-mail ----------
+
+// HMAC com a ENV_KEY: quem lê o banco não descobre o código (são só 1 milhão de possibilidades)
+function codigo_hash(int $usuarioId, string $codigo): string
+{
+    return hash_hmac('sha256', "$usuarioId:$codigo", (string) env('ENV_KEY', ''));
+}
 
 /**
- * Cria (se preciso) o usuário e gera o link de login.
- * Retorna ['token' => …, 'usuario' => …] ou ['erro' => mensagem].
+ * Cria (se preciso) o usuário e gera o código de 6 dígitos (os anteriores ainda não usados deixam de valer).
+ * Retorna ['codigo' => …, 'usuario' => …] ou ['erro' => mensagem].
  */
-function pedir_link(string $email, string $nome, ?string $redirecionar): array
+function pedir_codigo(string $email, string $nome, ?string $redirecionar): array
 {
     $pdo = db();
     $st = $pdo->prepare('SELECT * FROM usuarios WHERE email = ?');
@@ -111,61 +118,64 @@ function pedir_link(string $email, string $nome, ?string $redirecionar): array
         $nome = nome_proprio($nome !== '' ? $nome : preg_replace('/[._\-+\d]+/', ' ', strstr($email, '@', true)));
         $pdo->prepare('INSERT INTO usuarios (nome, email) VALUES (?, ?)')->execute([mb_substr($nome ?: 'Visitante', 0, 80), $email]);
         $u = ['id' => (int) $pdo->lastInsertId(), 'nome' => $nome, 'email' => $email, 'status' => 'ativo'];
-        logar('info', 'conta', 'conta_criada', "Conta criada ao pedir link: $email", ['origem' => 'entrar'], $u['id']);
+        logar('info', 'conta', 'conta_criada', "Conta criada ao pedir código: $email", ['origem' => 'entrar'], $u['id']);
     }
     if ($u['status'] !== 'ativo') {
-        logar('seguranca', 'conta', 'link_login_bloqueado', "Conta bloqueada pediu link: $email", [], (int) $u['id']);
+        logar('seguranca', 'conta', 'link_login_bloqueado', "Conta bloqueada pediu código: $email", [], (int) $u['id']);
         return ['erro' => 'bloqueado'];
     }
 
     $st = $pdo->prepare('SELECT COUNT(*) FROM login_tokens WHERE usuario_id = ? AND criado_em > NOW() - INTERVAL ' . LINK_JANELA_MIN . ' MINUTE');
     $st->execute([$u['id']]);
     if ((int) $st->fetchColumn() >= LINK_LIMITE) {
-        logar('aviso', 'conta', 'link_login_limite', "Links demais pedidos para $email", [], (int) $u['id']);
-        return ['erro' => 'Você já pediu vários links agora há pouco. Confira seu e-mail (e o spam) ou espere alguns minutos.'];
+        logar('aviso', 'conta', 'link_login_limite', "Códigos demais pedidos para $email", [], (int) $u['id']);
+        return ['erro' => 'Você já pediu vários códigos agora há pouco. Confira seu e-mail (e o spam) ou espere alguns minutos.'];
     }
 
-    $token = token_aleatorio();
+    $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    $pdo->prepare("UPDATE login_tokens SET usado_em = NOW() WHERE usuario_id = ? AND finalidade = 'login' AND usado_em IS NULL")
+        ->execute([$u['id']]); // só o código mais novo vale
     $pdo->prepare("INSERT INTO login_tokens (usuario_id, token_hash, finalidade, redirecionar, expira_em)
-                   VALUES (?, ?, 'login', ?, NOW() + INTERVAL " . LINK_MINUTOS . ' MINUTE)')
-        ->execute([$u['id'], hash('sha256', $token), $redirecionar]);
-    logar('info', 'conta', 'link_login_pedido', "Link de acesso gerado para $email", ['voltar' => $redirecionar], (int) $u['id']);
-    return ['token' => $token, 'usuario' => $u];
+                   VALUES (?, ?, 'login', ?, NOW() + INTERVAL " . CODIGO_MINUTOS . ' MINUTE)')
+        ->execute([$u['id'], codigo_hash((int) $u['id'], $codigo), $redirecionar]);
+    logar('info', 'conta', 'link_login_pedido', "Código de acesso gerado para $email", ['voltar' => $redirecionar], (int) $u['id']);
+    return ['codigo' => $codigo, 'usuario' => $u];
 }
 
-/** Dados do link, se ainda for válido (sem gastar). */
-function ver_link(string $token): ?array
+/** Confere o código e abre a sessão. Retorna ['destino' => …] ou ['erro' => mensagem]. */
+function usar_codigo(string $email, string $codigo): array
 {
-    if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $token)) {
-        return null;
+    $codigo = preg_replace('/\D/', '', $codigo);
+    $invalido = ['erro' => 'Código inválido ou vencido. Peça um novo.'];
+    $st = db()->prepare("SELECT t.*, u.email FROM login_tokens t JOIN usuarios u ON u.id = t.usuario_id
+                         WHERE u.email = ? AND u.status = 'ativo' AND t.finalidade = 'login' AND t.usado_em IS NULL
+                           AND t.expira_em > NOW() AND t.tentativas < " . CODIGO_TENTATIVAS . '
+                         ORDER BY t.id DESC LIMIT 1');
+    $st->execute([$email]);
+    $t = $st->fetch();
+    if (!$t) {
+        logar('seguranca', 'conta', 'login_falha', "Código sem pedido válido: $email", [], null, false, 401);
+        return $invalido;
     }
-    $st = db()->prepare("SELECT t.*, u.nome, u.email FROM login_tokens t JOIN usuarios u ON u.id = t.usuario_id
-                         WHERE t.token_hash = ? AND t.finalidade = 'login' AND t.usado_em IS NULL
-                           AND t.expira_em > NOW() AND u.status = 'ativo'");
-    $st->execute([hash('sha256', $token)]);
-    return $st->fetch() ?: null;
-}
-
-/** Gasta o link e abre a sessão. Retorna o destino ou null se o link não vale mais. */
-function usar_link(string $token): ?string
-{
-    $link = ver_link($token);
-    if (!$link) {
-        logar('seguranca', 'conta', 'login_falha', 'Link de acesso inválido, usado ou vencido', [], null, false, 401);
-        return null;
+    if (strlen($codigo) !== 6 || !hash_equals($t['token_hash'], codigo_hash((int) $t['usuario_id'], $codigo))) {
+        db()->prepare('UPDATE login_tokens SET tentativas = tentativas + 1 WHERE id = ?')->execute([$t['id']]);
+        $restam = CODIGO_TENTATIVAS - (int) $t['tentativas'] - 1;
+        logar('seguranca', 'conta', 'login_falha', "Código errado: $email", ['restam' => $restam], (int) $t['usuario_id'], false, 401);
+        return ['erro' => $restam > 0
+            ? 'Código errado. ' . ($restam === 1 ? 'Resta 1 tentativa.' : "Restam $restam tentativas.")
+            : 'Código errado. Este código não vale mais: peça um novo.'];
     }
-    // só um clique ganha, mesmo com dois ao mesmo tempo
+    // só uma tentativa certa ganha, mesmo com duas ao mesmo tempo
     $st = db()->prepare('UPDATE login_tokens SET usado_em = NOW() WHERE id = ? AND usado_em IS NULL');
-    $st->execute([$link['id']]);
+    $st->execute([$t['id']]);
     if ($st->rowCount() !== 1) {
-        logar('seguranca', 'conta', 'login_falha', 'Link de acesso usado duas vezes ao mesmo tempo', [], (int) $link['usuario_id'], false, 401);
-        return null;
+        return $invalido;
     }
     db()->prepare('UPDATE usuarios SET email_verificado_em = COALESCE(email_verificado_em, NOW()) WHERE id = ?')
-        ->execute([$link['usuario_id']]);
-    iniciar_sessao((int) $link['usuario_id']);
-    logar('seguranca', 'conta', 'login_ok', 'Entrou pelo link de acesso: ' . $link['email'], [], (int) $link['usuario_id'], false, 200);
-    return destino_seguro($link['redirecionar']);
+        ->execute([$t['usuario_id']]);
+    iniciar_sessao((int) $t['usuario_id']);
+    logar('seguranca', 'conta', 'login_ok', 'Entrou pelo código: ' . $t['email'], [], (int) $t['usuario_id'], false, 200);
+    return ['destino' => destino_seguro($t['redirecionar'])];
 }
 
 // Só deixa voltar para páginas do próprio site (nada de redirecionar para fora):
