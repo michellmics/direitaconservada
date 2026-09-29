@@ -1178,10 +1178,12 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 /* 1ª linha: os principais (PT, PL, Missão, PSOL, REDE), maiores; depois os demais */
 .partidos-destaque { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
 .partidos-destaque .partido-sigla { font-size: 1.45rem; }
+.partidos-destaque .partido-sigla.is-media { font-size: 1.05rem; }
 .partidos-destaque .partido-sigla.is-longa { font-size: 1rem; line-height: 1.05; }
 .partidos-demais { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 10px; }
 .partidos-demais .partido { aspect-ratio: 1.15; border-radius: 14px; }
 .partidos-demais .partido-sigla { font-size: 1rem; }
+.partidos-demais .partido-sigla.is-media { font-size: .78rem; }
 .partidos-demais .partido-sigla.is-longa { font-size: .74rem; line-height: 1.05; }
 /* "Exibir mais": quadrado tracejado no fim da lista */
 .partido.partido-mais {
@@ -1201,6 +1203,7 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
   transition: transform .18s cubic-bezier(.3, 1.4, .5, 1), box-shadow .18s, filter .2s;
 }
 .partido-sigla { font: 900 1.2rem/1 var(--sans); letter-spacing: -.02em; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); overflow-wrap: anywhere; text-align: center; }
+.partido-sigla.is-media { font-size: .95rem; white-space: nowrap; } /* 6 a 8 letras (MISSÃO, PODEMOS): menor, numa linha só */
 .partido-sigla.is-longa { font-size: .8rem; line-height: 1.05; white-space: nowrap; } /* siglas compridas: duas linhas (REPUBLI / CANOS), cada uma inteira */
 .partido:hover { transform: translateY(-4px) rotate(-2deg); box-shadow: 0 12px 22px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .3); }
 .partido:focus-visible { outline: 3px solid var(--gold-2); outline-offset: 3px; }
@@ -1242,9 +1245,11 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 @media (max-width: 520px) {
   .partidos-destaque { gap: 8px; }
   .partidos-destaque .partido-sigla { font-size: 1rem; }
+  .partidos-destaque .partido-sigla.is-media { font-size: .74rem; }
   .partidos-destaque .partido-sigla.is-longa { font-size: .62rem; }
   .partidos-demais { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; }
   .partidos-demais .partido-sigla { font-size: .9rem; }
+  .partidos-demais .partido-sigla.is-media { font-size: .7rem; }
   .partidos-demais .partido-sigla.is-longa { font-size: .6rem; }
   .partidos-ranking li { grid-template-columns: 24px 64px 1fr auto; gap: 8px; }
 }

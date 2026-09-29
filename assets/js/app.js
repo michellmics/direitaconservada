@@ -2083,7 +2083,7 @@
       const cheio = !on && meus.length >= PART.max;
       return `<button type="button" class="partido${on ? ' is-on' : ''}${cheio ? ' is-cheio' : ''}${p.sigla === recemMarcado ? ' pop' : ''}"
           data-partido="${esc(p.sigla)}" aria-pressed="${on}" title="${esc(p.nome)}" style="--p-cor:${p.cor};--p-texto:${p.cor_texto}">
-        <span class="partido-sigla${p.sigla.length > 8 ? ' is-longa' : ''}">${siglaEmLinhas(p.sigla)}</span>
+        <span class="partido-sigla${p.sigla.length > 8 ? ' is-longa' : p.sigla.length >= 6 ? ' is-media' : ''}">${siglaEmLinhas(p.sigla)}</span>
         ${on ? '<span class="partido-check" aria-hidden="true">✓</span>' : ''}
       </button>`;
     };
