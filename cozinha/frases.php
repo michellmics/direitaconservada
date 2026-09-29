@@ -5,7 +5,7 @@ require dirname(__DIR__) . '/includes/admin_auth.php';
 require dirname(__DIR__) . '/includes/frases.php';
 
 if (!admin_logged_in()) {
-    header('Location: ./'); // o login fica na página das enquetes
+    header('Location: ./'); // /cozinha/ manda para o login
     exit;
 }
 
@@ -126,7 +126,7 @@ $contagem = array_count_values(array_column($lista, 'lugar'));
     <a class="brand" href="./"><span>💬 Painel <b>Frases</b></span></a>
     <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
     <nav id="adm-nav">
-      <a href="./">🗳️ Enquetes</a>
+      <a href="enquetes">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
       <a href="pedidos">💰 Pagamentos</a>
       <a href="logs">📜 Logs</a>
@@ -134,7 +134,7 @@ $contagem = array_count_values(array_column($lista, 'lugar'));
       <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
       <a href="../<?= e(url('pote', ['lado' => 'direita'])) ?>" target="_blank">🫒 Ver Direita</a>
     </nav>
-    <form method="post" action="./" class="adm-inline">
+    <form method="post" action="enquetes" class="adm-inline">
       <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
       <button class="btn btn-ghost btn-sm" name="acao" value="sair">Sair</button>
     </form>

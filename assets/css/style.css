@@ -122,6 +122,13 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 }
 .agito-sensor.is-on { border-style: solid; background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .agito-dica { text-align: center; margin: 8px 0 0; font-size: .78rem; color: var(--muted); }
+/* embaixo do pote: convite pra treta no WhatsApp */
+.btn-whats {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: fit-content; margin: 14px auto 0;
+  background: #25d366; color: #0b2e17; font-weight: 700; border: 0; box-shadow: 0 10px 30px -12px #25d366;
+}
+.btn-whats:hover { background: #2ee872; }
+.btn-whats svg { width: 20px; height: 20px; flex: none; }
 .jar-capacity {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   margin: 10px 0 0; font-size: .75rem; color: var(--muted); opacity: .75;

@@ -13,6 +13,8 @@ const FRASE_LUGARES = [
     'rodape'  => 'Rodapé',
     'entrada' => 'Página de entrada (escolha do pote)',
     'email_oposicao' => 'E-mail: comentário do outro pote (provocação; pote = de quem recebe)',
+    'convite_botao'  => 'Convite pra treta: texto do botão embaixo do pote (bem curto)',
+    'convite_whats'  => 'Convite pra treta: mensagem do WhatsApp (pote = de quem convida; o link vai no fim)',
 ];
 
 /**
