@@ -4,10 +4,14 @@
 //   { lado, foto: "data:image/jpeg;base64,…" | null, frase: "…" | null } → { ok, foto, frase }  editar o próprio perfil
 //   foto  → vale para a pessoa inteira (as azeitonas e pimentas dela nos dois potes)
 //   frase → vale neste pote (frase de azeitona não serve na pimenta): nas azeitonas dela e na frase do mural
+//   nome  → 1 troca a cada NOME_TROCA_DIAS dias: a conta e as azeitonas/pimentas dela que tinham o nome antigo,
+//           nos dois potes (as que ela pôs no nome de outra pessoa ficam como estão). Vai para o log e avisa o administrador.
 // Presentes que ela deu e ninguém resgatou não mudam (são de outra pessoa).
 require dirname(__DIR__) . '/includes/config.php';
 require dirname(__DIR__) . '/includes/auth.php';
 require dirname(__DIR__) . '/includes/pedidos.php';
+
+const NOME_TROCA_DIAS = 30; // troca de nome: 1 vez a cada 30 dias
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -70,6 +74,28 @@ try {
     if ($frase !== null && ($frase === '' || mb_strlen($frase) > 140)) {
         responder(['erro' => 'A frase precisa ter de 1 a 140 letras.'], 422);
     }
+    // nome: mesmas regras da compra; só conta como troca se mudou de verdade
+    $nomeNovo = null;
+    $nomeAntigo = null;
+    if (isset($in['nome'])) {
+        $nomeNovo = nome_proprio(mb_substr((string) $in['nome'], 0, 60));
+        if ($nomeNovo === '' || mb_strlen($nomeNovo) > 28) {
+            responder(['erro' => 'O nome precisa ter de 1 a 28 letras.'], 422);
+        }
+        $st = $pdo->prepare("SELECT nome FROM itens WHERE $meus AND lado = ? ORDER BY id DESC LIMIT 1"); // o nome que o perfil mostra
+        $st->execute([$uid, $lado]);
+        $nomeAntigo = (string) $st->fetchColumn();
+        if ($nomeNovo === $nomeAntigo) {
+            $nomeNovo = null;
+        } else {
+            $st = $pdo->prepare('SELECT nome_trocado_em + INTERVAL ' . NOME_TROCA_DIAS . ' DAY FROM usuarios
+                                 WHERE id = ? AND nome_trocado_em > NOW() - INTERVAL ' . NOME_TROCA_DIAS . ' DAY');
+            $st->execute([$uid]);
+            if ($libera = $st->fetchColumn()) {
+                responder(['erro' => 'Você já trocou o nome há pouco tempo. Poderá trocar de novo a partir de ' . date('d/m/Y', strtotime($libera)) . '.'], 422);
+            }
+        }
+    }
     $foto = null;
     if (!empty($in['foto'])) {
         $foto = pedido_salvar_imagem((string) $in['foto'], 512);
@@ -93,11 +119,49 @@ try {
                        WHERE p.is_frase_compra = 1 AND i.usuario_id = ? AND i.presente_token IS NULL AND i.lado = ?")
             ->execute([$frase, $uid, $lado]);
     }
+    if ($nomeNovo !== null) {
+        $st = $pdo->prepare("UPDATE itens SET nome = ? WHERE $meus AND nome = ?");
+        $st->execute([$nomeNovo, $uid, $nomeAntigo]);
+        $trocados = $st->rowCount();
+        $pdo->prepare('UPDATE usuarios SET nome = ?, nome_trocado_em = NOW() WHERE id = ?')->execute([$nomeNovo, $uid]);
+    }
     $pdo->commit();
     foreach ($antigas as $a) {
         pedido_apagar_imagem($a); // só apaga se nenhum outro item usa
     }
-    responder(['ok' => true, 'foto' => $foto, 'frase' => $frase]);
+    if ($nomeNovo !== null) {
+        $dadosTroca = ['antes' => $nomeAntigo, 'depois' => $nomeNovo, 'itens' => $trocados, 'lado' => $lado];
+        logar('info', 'conta', 'nome_trocado', "Trocou o nome: {$nomeAntigo} → {$nomeNovo}", $dadosTroca, $uid);
+        // avisa o administrador depois da resposta (quem editou não espera o SMTP)
+        $email = (string) ($u['email'] ?? '');
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        register_shutdown_function(function () use ($dadosTroca, $uid, $email, $ip) {
+            if (function_exists('fastcgi_finish_request')) {
+                fastcgi_finish_request();
+            } elseif (function_exists('litespeed_finish_request')) {
+                litespeed_finish_request();
+            }
+            ignore_user_abort(true);
+            try {
+                require_once dirname(__DIR__) . '/includes/alertas.php';
+                alerta_admin('✏️ Troca de nome: ' . $dadosTroca['antes'] . ' → ' . $dadosTroca['depois'], 'Troca de nome no perfil', [[
+                    'Quem trocou', null, [
+                        ['Nome antigo', $dadosTroca['antes']],
+                        ['Nome novo', $dadosTroca['depois']],
+                        ['E-mail da conta', $email],
+                        ['Conta nº', (string) $uid],
+                        ['Pote do perfil', SIDES[$dadosTroca['lado']]['name']],
+                        ['Azeitonas/pimentas renomeadas', (string) $dadosTroca['itens'] . ' (nos dois potes)'],
+                        ['IP', $ip],
+                        ['Próxima troca liberada', date('d/m/Y', strtotime('+' . NOME_TROCA_DIAS . ' days'))],
+                    ],
+                ]], 'Uma pessoa trocou o nome no perfil. Confira se o nome novo é adequado (sem ofensa nem se passando por outra pessoa).', 'cozinha/logs');
+            } catch (Throwable $e) {
+                logar('erro', 'email', 'alerta_falha', 'Alerta de troca de nome: ' . $e->getMessage(), ['usuario' => $uid]);
+            }
+        });
+    }
+    responder(['ok' => true, 'foto' => $foto, 'frase' => $frase, 'nome' => $nomeNovo]);
 } catch (PDOException $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
         $pdo->rollBack();

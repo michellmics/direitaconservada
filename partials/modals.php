@@ -147,6 +147,9 @@
         </label>
         <p class="muted small">A foto vale para você nos dois potes.</p>
       </div>
+      <label class="field"><span>Seu nome <small>(nos dois potes; dá para trocar 1 vez a cada 30 dias)</small></span>
+        <input name="nome" required maxlength="28" autocomplete="name">
+      </label>
       <label class="field"><span>Sua frase <small>(neste pote; aparece no perfil, no certificado e no mural)</small></span>
         <textarea name="frase" required maxlength="140" rows="3"></textarea>
       </label>

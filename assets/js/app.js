@@ -2812,7 +2812,7 @@
     if (view) openCert(byId(Number(view.dataset.view)));
   });
 
-  // ---------- editar o próprio perfil: foto (nos dois potes) e frase (neste pote) ----------
+  // ---------- editar o próprio perfil: foto e nome (nos dois potes) e frase (neste pote) ----------
   let fotoNova = null;
   document.addEventListener('click', (e) => {
     if (!e.target.closest('[data-editar-perfil]')) return;
@@ -2821,6 +2821,8 @@
     fotoNova = null;
     $('#perfil-foto-preview').innerHTML = eu.foto ? `<img src="${esc(eu.foto)}" alt="">` : initialsAvatar(eu, 'perfil-foto-ini');
     $('#perfil-form').elements.frase.value = eu.frase;
+    $('#perfil-form').elements.nome.value = eu.nome;
+    $('#perfil-form').dataset.nomeAtual = eu.nome;
     openModal('#perfil-modal');
   });
   $('#perfil-foto')?.addEventListener('change', async (e) => {
@@ -2839,7 +2841,11 @@
     const btn = e.target.querySelector('[type="submit"]');
     btn.disabled = true;
     try {
-      await apiMural('api/perfil', { lado: SIDE, foto: fotoNova, frase: e.target.elements.frase.value });
+      // o nome só vai se mudou (trocar gasta a vez dos 30 dias; editar só a frase ou a foto, não)
+      const nome = e.target.elements.nome.value.trim().replace(/\s+/g, ' ');
+      const dados = { lado: SIDE, foto: fotoNova, frase: e.target.elements.frase.value };
+      if (nome !== e.target.dataset.nomeAtual) dados.nome = nome;
+      await apiMural('api/perfil', dados);
       location.reload(); // tudo redesenhado com o que ficou salvo
     } catch (err) {
       toast(err.message, 4000);
