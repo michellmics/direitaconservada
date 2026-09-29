@@ -14,6 +14,7 @@ const JAR_CAPACITY = 50000;
 
 const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
 
+require __DIR__ . '/ip.php';  // atrás do Cloudflare: REMOTE_ADDR vira o IP real do visitante
 require __DIR__ . '/log.php'; // logar() e os erros do PHP na tabela logs
 require __DIR__ . '/sides.php';
 require __DIR__ . '/rotas.php'; // url() e rota_params(): rotas sem .php e parâmetros cifrados
