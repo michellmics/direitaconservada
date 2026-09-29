@@ -4,9 +4,13 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/frases.php'; // frases engraçadas do mural, compra e rodapé
 $O = side($S['other']);
 $U = current_user();
-// página atual (rota + ?c=… cifrado): para onde voltar depois de entrar/sair
-$paginaAtual = rota_atual() . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . $_GET[URL_PARAM] : '');
+$ehPote = basename($_SERVER['SCRIPT_NAME']) === 'pote.php';
+// página atual (rota + ?c=… cifrado; pote = /direita ou /esquerda): para onde voltar depois de entrar/sair
+$paginaAtual = $ehPote ? $S['slug'] : rota_atual() . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . $_GET[URL_PARAM] : '');
 $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.php'], true); // páginas com o modal de compra
+// SEO: só os potes vão para o Google (endereço oficial + trilha "Início › pote"); entrar, perfil, presente e avisos: noindex
+$canonica = $ehPote ? url_base() . $S['slug'] : null;
+$pageDesc ??= $S['og'];
 ?>
 <!doctype html>
 <html lang="pt-BR" style="<?= theme_vars($S) ?>">
@@ -14,8 +18,12 @@ $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.ph
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= e($pageTitle) ?></title>
-  <meta name="description" content="<?= e($S['og']) ?>">
-  <?= og_tags($S['name'] . ' · ' . SITE_NAME, $S['og'], 'og-' . $S['slug'] . '.png') ?>
+  <meta name="description" content="<?= e($pageDesc) ?>">
+  <?= seo_tags($canonica, $canonica ? ['@type' => 'BreadcrumbList', 'itemListElement' => [
+      ['@type' => 'ListItem', 'position' => 1, 'name' => 'Pote Político', 'item' => url_base()],
+      ['@type' => 'ListItem', 'position' => 2, 'name' => $S['name'], 'item' => $canonica],
+  ]] : []) ?>
+  <?= og_tags($S['name'] . ' · ' . SITE_NAME, $S['og'], 'og-' . $S['slug'] . '.png', $canonica) ?>
   <meta name="theme-color" content="<?= $S['theme']['bg'] ?>">
   <?= pwa_tags() ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">

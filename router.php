@@ -23,6 +23,24 @@ if (str_contains($caminho, '..') || preg_match('#^/(includes|data|database|parti
     return $naoEncontrado();
 }
 
+// SEO (igual ao .htaccess): robots.txt, sitemap.xml e os potes com endereço fixo (/direita, /esquerda)
+if (preg_match('#^/(direita|esquerda)/$#', $caminho, $m)) {
+    header('Location: /' . $m[1] . ($query !== '' ? '?' . $query : ''), true, 301);
+    return true;
+}
+$seo = ['/robots.txt' => '/robots.php', '/sitemap.xml' => '/sitemap.php'];
+if (isset($seo[$caminho]) || preg_match('#^/(direita|esquerda)$#', $caminho, $m)) {
+    if (!isset($seo[$caminho])) {
+        $_GET['pote'] = $m[1];
+    }
+    $script = $seo[$caminho] ?? '/pote.php';
+    $_SERVER['SCRIPT_NAME'] = $_SERVER['PHP_SELF'] = $script;
+    $_SERVER['SCRIPT_FILENAME'] = $raiz . $script;
+    chdir($raiz);
+    require $raiz . $script;
+    return true;
+}
+
 // quem pede ".php" vai para a rota (só GET; formulários já apontam para as rotas)
 if (preg_match('#^(.*?)(/index)?\.php$#', $caminho, $m) && is_file($raiz . $caminho)) {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {

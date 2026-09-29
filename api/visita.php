@@ -52,8 +52,11 @@ $visitante = md5('dc-visita|' . $vid);
 
 // página: só rotas conhecidas (nada de texto livre no banco), com o pote quando houver
 $rota = trim((string) ($in['p'] ?? ''), '/');
-$rota = in_array($rota, ['pote', 'perfil', 'presente', 'avisos', 'entrar'], true) ? $rota : 'inicio';
 $lado = (string) ($in['l'] ?? '');
+if (isset(SIDES[$rota])) { // /direita, /esquerda = página do pote
+    [$lado, $rota] = [$rota, 'pote'];
+}
+$rota = in_array($rota, ['pote', 'perfil', 'presente', 'avisos', 'entrar'], true) ? $rota : 'inicio';
 $pagina = $rota . (isset(SIDES[$lado]) ? ' · ' . $lado : '');
 
 $dispositivo = preg_match('/ipad|tablet|kindle|silk|playbook|(android(?!.*mobile))/i', $ua) ? 'tablet'

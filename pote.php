@@ -7,7 +7,18 @@ require __DIR__ . '/includes/comentarios.php';
 require __DIR__ . '/includes/posts.php';
 require __DIR__ . '/includes/pote_js.php';
 
-$P = rota_params(['lado']);
+// endereço fixo /direita ou /esquerda (.htaccess / router.php → ?pote=…). Os antigos (/pote?c=…, /pote?lado=…, /pote)
+// levam para ele com 301: o Google passa a indexar um endereço só por pote (SEO)
+if (isset(SIDES[$_GET['pote'] ?? ''])) {
+    $P = ['lado' => $_GET['pote']];
+} else {
+    $P = rota_params();
+    $lado = $P['lado'] ?? $_GET['lado'] ?? 'direita';
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+        header('Location: ' . url('pote', ['lado' => isset(SIDES[$lado]) ? $lado : 'direita']), true, 301);
+        exit;
+    }
+}
 $S = side($P['lado'] ?? 'direita');
 
 // contas com o pote inteiro ficam aqui no servidor; para o navegador vai só o vidro + quem aparece na tela
@@ -32,7 +43,9 @@ foreach (banco_meus_itens((int) (current_user()['id'] ?? 0)) as $s => $lista) { 
         $comNivel[$s][] = $o['id'];
     }
 }
-$pageTitle = $S['name'] . ' · ' . SITE_NAME;
+// título e descrição para o Google (palavras que as pessoas pesquisam: direita, esquerda, debate, enquete)
+$pageTitle = $S['name'] . ': o pote da ' . $S['slug'] . ' · enquetes e debate político | Pote Político';
+$pageDesc = $S['og'] . ' Mural, enquetes, ranking por estado e o debate entre direita e esquerda no Pote Político.';
 
 // enquete no ar (do banco). Sem banco, o pote funciona normalmente, só sem enquete.
 require_once __DIR__ . '/includes/enquetes.php';

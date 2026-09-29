@@ -18,9 +18,14 @@ $total = array_sum($count);
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Escolha seu pote · <?= e(SITE_NAME) ?></title>
-  <meta name="description" content="Direita Conservada ou Pimenta da Resistência? Escolha seu pote, garanta seu lugar e debata com o outro lado.">
-  <?= og_tags('Escolha seu pote · ' . SITE_NAME, 'Direita Conservada ou Pimenta da Resistência? Entre no pote e debata com o outro lado.', 'og-inicio.png') ?>
+  <title>Pote Político: direita × esquerda · escolha seu lado e debata</title>
+  <meta name="description" content="Direita ou esquerda? Escolha seu pote (Direita Conservada ou Pimenta da Resistência), vote nas enquetes, veja o ranking por estado e debata política com o outro lado.">
+  <?= seo_tags(url_base(), [
+      ['@type' => 'WebSite', '@id' => url_base() . '#site', 'name' => 'Pote Político', 'alternateName' => SITE_NAME, 'url' => url_base(), 'inLanguage' => 'pt-BR',
+       'description' => 'Site de debate político entre direita e esquerda: dois potes, enquetes, mural e ranking por estado.'],
+      ['@type' => 'Organization', '@id' => url_base() . '#org', 'name' => 'Pote Político', 'url' => url_base(), 'logo' => url_base() . 'assets/img/icon-512.png'],
+  ]) ?>
+  <?= og_tags('Escolha seu pote · ' . SITE_NAME, 'Direita Conservada ou Pimenta da Resistência? Entre no pote e debata com o outro lado.', 'og-inicio.png', url_base()) ?>
   <meta name="theme-color" content="#120e0a">
   <?= pwa_tags() ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">

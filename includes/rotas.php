@@ -1,7 +1,8 @@
 <?php
 // URLs do site: rotas sem ".php" e parâmetros criptografados com a ENV_KEY do .env.
 //
-//   url('pote', ['lado' => 'direita'], 'mapa')   → pote?c=<token>#mapa
+//   url('pote', ['lado' => 'direita'], 'mapa')   → direita#mapa (os potes têm endereço fixo, por SEO)
+//   url('perfil', ['lado' => 'direita', 'id' => 1]) → perfil?c=<token>
 //   rota_params(['lado'])                        → lê ?c=… da página atual
 //
 // O token é AES-256-GCM (chave = sha256 da ENV_KEY): ninguém lê nem altera os parâmetros.
@@ -50,6 +51,10 @@ function url_decifrar(string $token): ?array
 /** Link relativo à raiz do site: url('perfil', ['lado' => 'direita', 'id' => 42]). Rota '' = página inicial. */
 function url(string $rota, array $params = [], string $ancora = ''): string
 {
+    // os potes têm endereço fixo e legível (/direita, /esquerda): é o que o Google indexa (SEO)
+    if ($rota === 'pote' && array_keys($params) === ['lado'] && isset(SIDES[$params['lado']])) {
+        return $params['lado'] . ($ancora !== '' ? '#' . $ancora : '');
+    }
     $u = $rota === '' ? './' : $rota;
     if ($params) {
         $u .= '?' . URL_PARAM . '=' . url_cifrar($params);
@@ -133,16 +138,39 @@ function links_para_js(string $lado, array $items, array $comments, array $extra
 }
 
 /**
+ * SEO (Google): endereço oficial da página (canonical) + dados estruturados (JSON-LD).
+ * Sem $canonica = página que não deve aparecer na busca (entrar, perfil, presente, avisos): noindex.
+ */
+function seo_tags(?string $canonica, array $jsonLd = []): string
+{
+    if ($canonica === null) {
+        return '<meta name="robots" content="noindex, follow">';
+    }
+    $tags = ['<link rel="canonical" href="' . htmlspecialchars($canonica, ENT_QUOTES, 'UTF-8') . '">'];
+    if ($jsonLd) {
+        $tags[] = '<script type="application/ld+json">' . json_encode(['@context' => 'https://schema.org'] + (array_is_list($jsonLd) ? ['@graph' => $jsonLd] : $jsonLd),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) . '</script>';
+    }
+    return implode("\n  ", $tags);
+}
+
+/** Endereço completo da página inicial (APP_URL com barra no fim). */
+function url_base(): string
+{
+    return rtrim((string) env('APP_URL', 'http://localhost:8080'), '/') . '/';
+}
+
+/**
  * Tags de compartilhamento (WhatsApp, Facebook, X…): título, descrição e a imagem 1200×630 (assets/img/og-*.png).
  * Endereços absolutos (APP_URL): o WhatsApp não aceita caminho relativo. O ?v= força o WhatsApp a baixar de novo
  * quando a imagem muda (ele guarda em cache).
  */
-function og_tags(string $titulo, string $descricao, string $imagem): string
+function og_tags(string $titulo, string $descricao, string $imagem, ?string $canonica = null): string
 {
     $base = rtrim((string) env('APP_URL', 'http://localhost:8080'), '/');
     $arq = dirname(__DIR__) . "/assets/img/$imagem";
     $img = "$base/assets/img/$imagem" . (is_file($arq) ? '?v=' . filemtime($arq) : '');
-    $pagina = $base . (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . rawurlencode((string) $_GET[URL_PARAM]) : '');
+    $pagina = $canonica ?? $base . (string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . rawurlencode((string) $_GET[URL_PARAM]) : '');
     $t = fn(string $s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
     return implode("\n  ", [
         '<meta property="og:type" content="website">',

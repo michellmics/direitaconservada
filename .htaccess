@@ -15,6 +15,13 @@ RewriteRule ^(README\.md|composer\.(json|lock))$ - [R=404,L]
 # fotos e selos enviados nas compras: só imagem (nada de script)
 RewriteRule ^uploads/(?!pedidos/[a-f0-9]{24}\.(jpg|png)$) - [R=404,L]
 
+# SEO: robots.txt e sitemap.xml gerados pelo PHP; os potes têm endereço fixo (/direita, /esquerda → pote.php)
+RewriteRule ^robots\.txt$ robots.php [L]
+RewriteRule ^sitemap\.xml$ sitemap.php [L]
+RewriteCond %{REQUEST_URI} ^(.+)/$
+RewriteRule ^(direita|esquerda)/$ %1 [R=301,L]
+RewriteRule ^(direita|esquerda)$ pote.php?pote=$1 [L,QSA]
+
 # quem pede ".php" vai para a rota sem a extensão (só GET; mantém o ?c=…)
 RewriteCond %{REQUEST_METHOD} =GET
 RewriteCond %{THE_REQUEST} \s/+([^?\s]*?)(?:index)?\.php[?\s] [NC]
