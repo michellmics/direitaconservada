@@ -4,6 +4,28 @@
 // Não usa putenv(): no "php -S" o processo é reaproveitado entre acessos, e putenv
 // faria mudanças no .env só valerem depois de reiniciar o servidor.
 
+/**
+ * Qual .env vale (o primeiro que existir):
+ *   1. um nível acima do projeto   (site em /home/USUARIO/public_html → /home/USUARIO/.env)
+ *   2. dois níveis acima           (site em /home/USUARIO/public_html/pote → /home/USUARIO/.env)
+ *   3. na raiz do projeto          (desenvolvimento)
+ * Os dois primeiros ficam fora do alcance do navegador. O painel mostra qual foi lido (Atualizar).
+ */
+function env_arquivo(): ?string
+{
+    static $arquivo = false;
+    if ($arquivo === false) {
+        $arquivo = null;
+        foreach ([dirname(__DIR__, 2) . '/.env', dirname(__DIR__, 3) . '/.env', dirname(__DIR__) . '/.env'] as $opcao) {
+            if (is_readable($opcao)) {
+                $arquivo = realpath($opcao) ?: $opcao;
+                break;
+            }
+        }
+    }
+    return $arquivo;
+}
+
 function env_file_vars(): array
 {
     static $vars = null;
@@ -11,15 +33,7 @@ function env_file_vars(): array
         return $vars;
     }
     $vars = [];
-    // 1º fora da pasta do site (no cPanel: /home/USUARIO/.env, acima da public_html — o navegador não alcança);
-    // 2º na raiz do projeto (desenvolvimento). O primeiro que existir vale.
-    $file = null;
-    foreach ([dirname(__DIR__, 2) . '/.env', dirname(__DIR__) . '/.env'] as $opcao) {
-        if (is_readable($opcao)) {
-            $file = $opcao;
-            break;
-        }
-    }
+    $file = env_arquivo();
     if ($file === null) {
         return $vars;
     }

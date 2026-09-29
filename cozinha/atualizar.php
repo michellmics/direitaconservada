@@ -101,6 +101,7 @@ $curto = fn(?string $sha) => $sha ? substr($sha, 0, 7) : '—';
         </form>
         <p class="adm-desc deploy-nota">Baixa o código da branch <b><?= e($cfg['branch']) ?></b>, troca os arquivos, apaga os que saíram do repositório e roda as migrations.
           Nunca mexe em <code>.env</code> e <code>uploads/</code> (a <code>vendor/</code> vem junto do git). Tudo fica registrado em <a href="logs?categoria=deploy">Logs → deploy</a>.</p>
+        <p class="adm-desc deploy-nota">Configuração (.env) lida de: <code><?= e(env_arquivo() ?? 'nenhum .env encontrado') ?></code></p>
       </div>
 
       <?php if ($resultado): ?>
