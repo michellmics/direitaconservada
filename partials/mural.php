@@ -16,7 +16,7 @@
   <form class="composer" id="composer">
     <div class="composer-avatar" id="composer-avatar">?</div>
     <div class="composer-body">
-      <textarea id="composer-text" maxlength="400" placeholder="Compartilhe uma ideia, opinião, notícia ou vídeo… (só <?= e($S['members']) ?> podem publicar)"></textarea>
+      <textarea id="composer-text" maxlength="400" placeholder="Expresse sua opinião e gere uma treta!"></textarea>
       <div class="composer-video" id="composer-video" hidden></div>
       <div class="composer-foot">
         <span><span id="composer-count">0/180</span> · cole um link do YouTube ou TikTok para anexar vídeo</span>
