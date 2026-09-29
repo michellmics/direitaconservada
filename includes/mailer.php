@@ -49,11 +49,14 @@ function smtp_sem_verificacao(): bool
 }
 
 /** Envia o e-mail. Retorna null se deu certo ou a mensagem de erro. */
-function enviar_email(string $para, string $nome, string $assunto, string $html, string $texto): ?string
+function enviar_email(string $para, string $nome, string $assunto, string $html, string $texto, array $cabecalhos = []): ?string
 {
     try {
         $m = mailer();
         $m->addAddress($para, $nome);
+        foreach ($cabecalhos as $k => $v) {
+            $m->addCustomHeader($k, $v);
+        }
         $m->Subject = $assunto;
         $m->isHTML(true);
         $m->Body    = $html;
@@ -119,6 +122,46 @@ function email_link_login(array $S, string $nome, string $link): array
     $html = email_moldura($S, $S['emoji'], 'Seu link para entrar', $corpo);
     $texto = "Olá, {$primeiro}!\n\nPara entrar em {$S['name']}, abra o link abaixo (vale por {$min} minutos, uso único):\n\n{$link}\n\nNão pediu? É só ignorar este e-mail.";
     return [$S['emoji'] . ' Seu link para entrar', $html, $texto];
+}
+
+/**
+ * E-mail "você recebeu um comentário" ($S = pote de quem recebe, $A = pote de quem comentou).
+ * Com $provocacao (comentário do outro pote): assunto e faixa de briga, e a frase provocativa em destaque.
+ */
+function email_comentario_recebido(array $S, string $nome, string $autor, array $A, string $trecho, bool $resposta,
+    string $link, ?string $provocacao, string $linkParar): array
+{
+    $t = $S['theme'];
+    $primeiro = explode(' ', $nome)[0];
+    $autorCurto = explode(' ', $autor)[0];
+    $onde = $resposta ? 'respondeu ao seu comentário' : 'comentou na sua publicação';
+    $trecho = mb_strlen($trecho) > 280 ? mb_substr($trecho, 0, 277) . '…' : $trecho;
+    $umItem = $A['item'] === 'pimenta' ? 'uma pimenta' : 'uma azeitona';
+
+    if ($provocacao) {
+        $assunto = "{$A['emoji']} Alerta: {$umItem} do outro pote te provocou!";
+        $faixa = 'Invasão do outro pote';
+        $icone = $A['emoji'] . '⚔️' . $S['emoji'];
+        $abertura = '<p style="margin:0 0 12px;">' . e($primeiro) . ', <b>' . e($autor) . '</b>, ' . e($umItem) . ' do pote <b>' . e($A['name'])
+            . '</b>, ' . e($onde) . ':</p>';
+        $botao = 'Responder agora ' . $S['emoji'];
+    } else {
+        $assunto = "💬 {$autorCurto} {$onde}";
+        $faixa = 'Comentário novo';
+        $icone = '💬';
+        $abertura = '<p style="margin:0 0 12px;">Olá, ' . e($primeiro) . '! <b>' . e($autor) . '</b>, do seu pote, ' . e($onde) . ':</p>';
+        $botao = 'Ver o comentário';
+    }
+
+    $corpo = $abertura . '
+          <blockquote style="margin:0 0 20px;padding:14px 16px;background:#fff;border-left:4px solid ' . $A['theme']['gold'] . ';border-radius:10px;font-style:italic;">“' . nl2br(e($trecho)) . '”</blockquote>'
+        . ($provocacao ? '<p style="margin:0 0 20px;padding:14px 16px;text-align:center;font-family:Georgia,serif;font-size:19px;font-weight:bold;line-height:1.35;color:#fff;background:' . $t['dark'] . ';border-radius:12px;">🔥 ' . e($provocacao) . '</p>' : '')
+        . email_botao($S, $link, $botao) . '
+          <p style="margin:16px 0 0;font-size:12px;color:#6b6a55;text-align:center;">Não quer mais esses avisos? <a href="' . e($linkParar) . '" style="color:#6b6a55;">Parar de receber</a>.</p>';
+    $html = email_moldura($S, $icone, $faixa, $corpo);
+    $texto = ($provocacao ? "{$primeiro}, {$autor} ({$umItem} do pote {$A['name']}) {$onde}:" : "Olá, {$primeiro}! {$autor}, do seu pote, {$onde}:")
+        . "\n\n\"{$trecho}\"\n\n" . ($provocacao ? "🔥 {$provocacao}\n\n" : '') . "Responda: {$link}\n\nParar de receber estes avisos: {$linkParar}";
+    return [$assunto, $html, $texto];
 }
 
 // E-mail "você subiu de nível" (níveis e regras em includes/sides.php e includes/tempero.php)

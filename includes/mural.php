@@ -120,6 +120,8 @@ function mural_comentar(int $usuarioId, string $postId, string $texto, $video, ?
         ->execute([$post['id'], $item['id'], $citaId, $texto !== '' ? $texto : null, $video['provider'] ?? null, $video['id'] ?? null, (int) ($video['vertical'] ?? 0)]);
     $id = (int) $pdo->lastInsertId();
     $pdo->prepare('UPDATE posts SET comentarios_count = comentarios_count + 1 WHERE id = ?')->execute([$post['id']]);
+    require_once __DIR__ . '/avisos.php';
+    aviso_comentario_agendar($id); // e-mail para o dono do post (e para quem foi citado), depois da resposta
     $st = $pdo->prepare(BANCO_COMENTARIO_SQL . 'AND c.id = ?');
     $st->execute([$usuarioId, $id]);
     return ['comentario' => comentario_para_js(banco_comentario_js($post['lado'], $st->fetch()))];

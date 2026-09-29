@@ -12,6 +12,7 @@ const FRASE_LUGARES = [
     'compra'  => 'Janela de compra',
     'rodape'  => 'Rodapé',
     'entrada' => 'Página de entrada (escolha do pote)',
+    'email_oposicao' => 'E-mail: comentário do outro pote (provocação; pote = de quem recebe)',
 ];
 
 /**
