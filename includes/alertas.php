@@ -2,6 +2,7 @@
 // Alertas por e-mail para o administrador (migration 020). Destinatários: ENV_EMAIL_ALERTAS no .env, separados por vírgula.
 //   qr      → abriu a tela de pagamento com o QR Code (ao gerar o pedido e em cada "Ver Pix")
 //   copiou  → copiou o código Pix copia e cola
+//   pagou   → clicou em "Já paguei"
 //   atraso  → pedido aguardando confirmação há mais de ALERTA_ATRASO_MIN minutos (cron/alertas, 1 e-mail por pedido)
 // Anti-enxurrada: o mesmo evento do mesmo pedido gera no máximo 1 e-mail a cada ALERTA_INTERVALO_MIN minutos
 // (as vezes seguintes são contadas e aparecem no próximo e-mail).
@@ -16,6 +17,7 @@ const ALERTA_ATRASO_MIN    = 15;
 const ALERTA_EVENTOS = [
     'qr'      => ['Abriu o QR Code para compra', '#2f6fb5', 'pendente', false],
     'copiou'  => ['Usuário copiou o código Pix copia e cola', '#b5832f', 'pendente', false],
+    'pagou'   => ['Usuário clicou em "Já paguei": conferir o Pix', '#2f8a4a', 'pendente', false],
     'atraso'  => ['Aguardando confirmação de pagamento', '#b53a2f', 'pendente', true],
     'expirou' => ['Pedido expirou sem pagamento confirmado', '#6b6a55', 'expirado', true],
 ];
@@ -80,8 +82,8 @@ function alerta_pedido(string $codigo, string $evento, array $ctx = []): bool
         return false;
     }
 
+    require_once __DIR__ . '/mailer.php'; // antes de montar o e-mail: ele usa email_botao() e email_moldura()
     [$assunto, $html, $texto] = alerta_pedido_email($p, $evento, $ctx);
-    require_once __DIR__ . '/mailer.php';
     $ok = false;
     foreach ($destinos as $para) {
         $ok = enviar_email($para, 'Administrador', $assunto, $html, $texto) === null || $ok;
@@ -155,6 +157,7 @@ function alerta_pedido_email(array $p, string $evento, array $ctx): array
         'Pix vence em'     => alerta_data($p['expira_em']),
         'Abriu o QR Code'  => isset($eventos['qr']) ? $eventos['qr']['vezes'] . 'x (última: ' . alerta_data($eventos['qr']['ultimo_em']) . ')' : 'não',
         'Copiou o código'  => isset($eventos['copiou']) ? $eventos['copiou']['vezes'] . 'x (última: ' . alerta_data($eventos['copiou']['ultimo_em']) . ')' : 'não',
+        'Clicou em Já paguei' => isset($eventos['pagou']) ? $eventos['pagou']['vezes'] . 'x (última: ' . alerta_data($eventos['pagou']['ultimo_em']) . ')' : 'não',
         'Histórico'        => (int) $h['pagos'] . ' pedido(s) pago(s) antes, total ' . alerta_reais((int) $h['gasto'])
                               . ' · ' . (int) $h['pendentes'] . ' outro(s) pendente(s) · ' . (int) $h['perdidos'] . ' expirado(s)/negado(s)',
         'IP'               => $p['ip'] . (!empty($ctx['ip']) && $ctx['ip'] !== $p['ip'] ? ' (agora: ' . $ctx['ip'] . ')' : ''),
@@ -205,7 +208,6 @@ function alerta_pedido_email(array $p, string $evento, array $ctx): array
     }
     $texto .= "\nO que está comprando:\n{$itensTexto}\nPainel: {$painel}\n";
 
-    require_once __DIR__ . '/mailer.php';
     $html = email_moldura($S, '🔔', 'Alerta de pagamento', $corpo);
     $assunto = "🔔 {$status} · {$p['codigo']} · " . alerta_reais((int) $p['total_centavos']) . ' · ' . nome_proprio($p['usuario_nome']);
     return [$assunto, $html, $texto];

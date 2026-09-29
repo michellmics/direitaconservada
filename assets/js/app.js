@@ -987,7 +987,9 @@
 
   // "Já paguei": a compra aparece para a pessoa (só para ela) enquanto o painel confere
   $('#buy-pix').addEventListener('click', (e) => {
-    if (!e.target.closest('[data-ja-paguei]') || !compraFeita) return;
+    if (!e.target.closest('[data-ja-paguei]')) return;
+    avisarPix($('#buy-pix .pix-code textarea')?.dataset.pedido, 'pagou'); // avisa o administrador para conferir o Pix
+    if (!compraFeita) return;
     const { bought, nivelAntes } = aplicarCompra(true);
     if (!bought.length) return;
     const nivelNovo = meuNivel(SIDE);

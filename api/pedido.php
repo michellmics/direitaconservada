@@ -3,7 +3,7 @@
 //   POST JSON { acao: "criar", lado, titular, email?, itens: [...] } → { pedido, itens, entrou }  (itens pendentes, já no banco)
 //   POST JSON { acao: "criar", lado, titular, renovar: número }     → { pedido }                 (renovação; precisa estar logado)
 // E-mail que já tem conta (sem login): → { login: mensagem, entrar: tela para digitar o código enviado por e-mail }.
-//   POST JSON { acao: "evento", codigo, evento: "qr" | "copiou" } → { ok }  (alerta ao administrador: includes/alertas.php)
+//   POST JSON { acao: "evento", codigo, evento: "qr" | "copiou" | "pagou" } → { ok }  (alerta ao administrador: includes/alertas.php)
 require dirname(__DIR__) . '/includes/config.php';
 require dirname(__DIR__) . '/includes/auth.php';
 require dirname(__DIR__) . '/includes/pedidos.php';
@@ -42,7 +42,7 @@ if ($acao === 'evento') {
     $u = current_user();
     $codigo = (string) ($in['codigo'] ?? '');
     $evento = (string) ($in['evento'] ?? '');
-    if ($u && preg_match('/^[A-Z0-9]{8}$/', $codigo) && in_array($evento, ['qr', 'copiou'], true)) {
+    if ($u && preg_match('/^[A-Z0-9]{8}$/', $codigo) && in_array($evento, ['qr', 'copiou', 'pagou'], true)) {
         alerta_pedido_agendar($codigo, $evento, (int) $u['id']);
     }
     responder(['ok' => true]);
