@@ -7,6 +7,7 @@
   const eu = document.currentScript;
   const API = eu.src.replace(/assets\/js\/push\.js.*$/, 'api/push');
   const LADO = eu.dataset.lado || '';
+  const CONTA = eu.dataset.conta || '0'; // id de quem está logado (0 = visitante)
   const suporta = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const CHAVE_DISPENSA = 'push-convite-dispensado';
@@ -37,7 +38,7 @@
         || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(b, (c) => c.charCodeAt(0)) });
       const r = await post({ acao: 'inscrever', endpoint: sub.endpoint, lado: LADO });
       if (!r.ok) throw new Error();
-      guardar(CHAVE_SYNC, String(Date.now()));
+      guardar(CHAVE_SYNC, `${CONTA}|${Date.now()}`);
       aviso('🔔 Pronto! Você vai saber das enquetes novas e das viradas no placar.');
     } catch {
       aviso('Não deu para ativar os avisos agora. Tente de novo mais tarde.');
@@ -118,12 +119,15 @@
     if (b.dataset.push === 'on') desativar(); else ativar();
   });
 
-  // já inscrito: 1 vez por dia confirma a inscrição no servidor (atualiza o pote e a conta de quem está vendo)
+  // já inscrito: confirma a inscrição no servidor 1 vez por dia e na hora em que a pessoa entra na conta
+  // (a conta liga o aparelho aos avisos pessoais: comentário na publicação dela e citação)
   (async () => {
     await atualizarBotao();
     const sub = await inscricaoAtual().catch(() => null);
-    if (sub && Date.now() - Number(ler(CHAVE_SYNC) || 0) > 864e5) {
-      post({ acao: 'inscrever', endpoint: sub.endpoint, lado: LADO }).then(() => guardar(CHAVE_SYNC, String(Date.now()))).catch(() => {});
+    const [contaSync, quando] = String(ler(CHAVE_SYNC) || '0|0').split('|');
+    const contaNova = CONTA !== '0' && CONTA !== contaSync;
+    if (sub && (contaNova || Date.now() - Number(quando || 0) > 864e5)) {
+      post({ acao: 'inscrever', endpoint: sub.endpoint, lado: LADO }).then(() => guardar(CHAVE_SYNC, `${CONTA}|${Date.now()}`)).catch(() => {});
     }
   })();
 })();

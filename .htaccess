@@ -7,13 +7,13 @@ DirectoryIndex index.php
 RewriteEngine On
 
 # pastas e arquivos internos nunca são servidos (.env, includes, dados, migrations…)
-RewriteRule ^(includes|data|database|partials|vendor)(/|$) - [R=404,L]
-RewriteRule (^|/)\.(?!well-known/) - [R=404,L]
-RewriteRule ^router\.php$ - [R=404,L]
+RewriteRule ^(includes|data|database|partials|vendor)(/|$) erro.php [L]
+RewriteRule (^|/)\.(?!well-known/) erro.php [L]
+RewriteRule ^router\.php$ erro.php [L]
 # documentação e dependências não são públicas (o README descreve o painel e as tabelas)
-RewriteRule ^(README\.md|composer\.(json|lock))$ - [R=404,L]
+RewriteRule ^(README\.md|composer\.(json|lock))$ erro.php [L]
 # fotos e selos enviados nas compras: só imagem (nada de script)
-RewriteRule ^uploads/(?!pedidos/[a-f0-9]{24}\.(jpg|png)$) - [R=404,L]
+RewriteRule ^uploads/(?!pedidos/[a-f0-9]{24}\.(jpg|png)$) erro.php [L]
 
 # SEO: robots.txt e sitemap.xml gerados pelo PHP; os potes têm endereço fixo (/direita, /esquerda → pote.php)
 RewriteRule ^robots\.txt$ robots.php [L]
@@ -31,6 +31,11 @@ RewriteRule ^ /%1 [R=301,L,NE]
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.+?)/?$ $1.php [L]
+
+# o resto (endereço que não existe) → página de erro 404 com botão para a página inicial (erro.php)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ erro.php [L]
 </IfModule>
 
 # Segunda barreira (vale mesmo sem mod_rewrite): .env, documentação e composer nunca são entregues

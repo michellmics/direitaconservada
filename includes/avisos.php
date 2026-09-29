@@ -1,6 +1,7 @@
 <?php
 // Aviso por e-mail de comentário recebido (migration 018).
 //   Recebe: o dono da publicação comentada e, numa resposta, o autor do comentário citado (nunca quem comentou).
+//   Vai por e-mail e também como notificação do app (push) nos aparelhos em que a pessoa ativou o 🔔.
 //   Comentário do outro pote: e-mail provocativo, com uma frase 'email_oposicao' sorteada (edite em /cozinha/frases).
 //   Anti-enxurrada: no máximo 1 aviso por pessoa e publicação a cada AVISO_INTERVALO_MIN minutos.
 //   Quem clica em "parar de receber" (link no e-mail → /avisos) fica com usuarios.avisos_email = 0.
@@ -27,12 +28,10 @@ function aviso_comentario_agendar(int $comentarioId): void
     });
 }
 
-/** Manda os avisos de um comentário. Retorna quantos e-mails saíram. */
+/** Manda os avisos de um comentário (e-mail e notificação do app). Retorna quantos e-mails saíram. */
 function aviso_comentario_enviar(int $comentarioId): int
 {
-    if (!is_file(dirname(__DIR__) . '/vendor/autoload.php')) {
-        return 0; // sem PHPMailer (composer install)
-    }
+    $temEmail = is_file(dirname(__DIR__) . '/vendor/autoload.php'); // sem PHPMailer (composer install): só a notificação
     $pdo = db();
     // o comentário, quem comentou e a publicação (com o dono)
     $st = $pdo->prepare("SELECT c.id, c.post_id, c.texto, c.video_id, c.cita_id,
@@ -60,14 +59,16 @@ function aviso_comentario_enviar(int $comentarioId): int
     }
     unset($para[(int) $c['autor_uid']]); // ninguém é avisado do próprio comentário
 
-    require_once __DIR__ . '/mailer.php';
+    if ($temEmail) {
+        require_once __DIR__ . '/mailer.php';
+    }
     $enviados = 0;
     foreach ($para as $uid => $info) {
-        $st = $pdo->prepare("SELECT nome, email FROM usuarios WHERE id = ? AND status = 'ativo' AND avisos_email = 1");
+        $st = $pdo->prepare("SELECT nome, email, avisos_email FROM usuarios WHERE id = ? AND status = 'ativo'");
         $st->execute([$uid]);
         $u = $st->fetch();
-        if (!$u || str_ends_with(strtolower($u['email']), '.local')) {
-            continue; // parou de receber, bloqueado, ou conta de teste (seed)
+        if (!$u) {
+            continue; // conta bloqueada / apagada
         }
         // anti-enxurrada: 1 = primeiro aviso desta publicação, 2 = passou o intervalo; 0 = avisado há pouco
         $st = $pdo->prepare('INSERT INTO avisos_comentario (usuario_id, post_id) VALUES (?, ?)
@@ -82,6 +83,22 @@ function aviso_comentario_enviar(int $comentarioId): int
         $oposicao = $c['autor_lado'] !== $info['lado'];
         $provocacao = $oposicao ? (frase('email_oposicao', $info['lado']) ?? 'Vai deixar barato? Vai lá e defende o seu pote!') : null;
         $trecho = trim((string) $c['texto']) !== '' ? (string) $c['texto'] : '🎬 (mandou um vídeo)';
+
+        // notificação do app (quem ativou o 🔔 no aparelho; desativa pelo mesmo botão). Falhar não impede o e-mail.
+        try {
+            require_once __DIR__ . '/push.php';
+            $autorNome = nome_proprio($c['autor_nome']);
+            push_avisar('comentario',
+                $info['resposta'] ? "↩️ $autorNome respondeu seu comentário" : "💬 $autorNome comentou na sua publicação",
+                '“' . mb_strimwidth($trecho, 0, 140, '…') . '”' . ($provocacao ? ' ' . $provocacao : ''),
+                url('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]), null, $uid);
+        } catch (Throwable $e) {
+            // tabelas do push ainda não criadas (migration 025) ou serviço de push fora do ar
+        }
+
+        if (!$temEmail || !$u['avisos_email'] || str_ends_with(strtolower($u['email']), '.local')) {
+            continue; // e-mail: pediu para parar ou conta de teste (seed)
+        }
         $link = url_absoluta('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]);
         $linkParar = url_absoluta('avisos', ['u' => $uid]);
         [$assunto, $html, $texto] = email_comentario_recebido($S, nome_proprio($u['nome']), nome_proprio($c['autor_nome']), $A,

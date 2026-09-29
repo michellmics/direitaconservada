@@ -11,11 +11,9 @@ $raiz = __DIR__;
 $caminho = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/');
 $query = $_SERVER['QUERY_STRING'] ?? '';
 
-$naoEncontrado = function () {
-    http_response_code(404);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo 'Página não encontrada.';
-    return true;
+$naoEncontrado = function () { // página de erro 404 com botão para a página inicial (igual ao .htaccess → erro.php)
+    require __DIR__ . '/includes/erro.php';
+    pagina_erro(404);
 };
 
 if (str_contains($caminho, '..') || preg_match('#^/(includes|data|database|partials|vendor)(/|$)|/\.|^/router\.php$|^/(README\.md|composer\.(json|lock))$#i', $caminho)

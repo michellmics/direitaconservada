@@ -7,6 +7,8 @@
 //
 //   push_avisar('enquete', '🗳️ Enquete nova!', 'Pergunta…', 'direita#enquete')   → todos os inscritos
 //   push_avisar('placar', …, lado: 'esquerda')                                    → só os inscritos do pote esquerda
+//   push_avisar('comentario', …, usuarioId: 42)                                   → só os aparelhos da conta 42
+//                                                   (comentário na publicação / citação: includes/avisos.php)
 //   push_placar()   (cron) → a virada no placar avisa quem ficou para trás (no máximo 1 aviso a cada 6 h)
 require_once __DIR__ . '/db.php';
 
@@ -104,19 +106,23 @@ function push_desinscrever(string $endpoint): void
 }
 
 /**
- * Cria o aviso e manda para os inscritos (todos, ou só os do pote $lado). Envia em lotes paralelos (curl_multi);
+ * Cria o aviso e manda para os inscritos: todos, só os do pote $lado ou só os aparelhos da conta $usuarioId
+ * (aviso pessoal: sem aparelho inscrito, nada é criado). Envia em lotes paralelos (curl_multi);
  * endpoint que não existe mais (404/410) sai da lista. Retorna ['id', 'enviados', 'falhas'].
  */
-function push_avisar(string $tipo, string $titulo, string $texto, string $url, ?string $lado = null): array
+function push_avisar(string $tipo, string $titulo, string $texto, string $url, ?string $lado = null, ?int $usuarioId = null): array
 {
     $pdo = db();
+    [$onde, $params] = $usuarioId ? [' WHERE usuario_id = ?', [$usuarioId]] : ($lado ? [' WHERE lado = ?', [$lado]] : ['', []]);
+    $st = $pdo->prepare('SELECT id, endpoint FROM push_inscricoes' . $onde);
+    $st->execute($params);
+    $alvos = $st->fetchAll();
+    if (!$alvos && $usuarioId) {
+        return ['id' => 0, 'enviados' => 0, 'falhas' => 0];
+    }
     $pdo->prepare('INSERT INTO push_avisos (tipo, lado, titulo, texto, url) VALUES (?, ?, ?, ?, ?)')
         ->execute([$tipo, $lado, mb_substr($titulo, 0, 120), mb_substr($texto, 0, 300), mb_substr($url, 0, 200)]);
     $avisoId = (int) $pdo->lastInsertId();
-
-    $st = $pdo->prepare('SELECT id, endpoint FROM push_inscricoes' . ($lado ? ' WHERE lado = ?' : ''));
-    $st->execute($lado ? [$lado] : []);
-    $alvos = $st->fetchAll();
     $enviados = $falhas = 0;
     $mortos = [];
     foreach (array_chunk($alvos, 50) as $lote) {
@@ -161,7 +167,7 @@ function push_avisar(string $tipo, string $titulo, string $texto, string $url, ?
         $pdo->exec('DELETE FROM push_inscricoes WHERE id IN (' . implode(',', $mortos) . ')');
     }
     $pdo->prepare('UPDATE push_avisos SET enviados = ?, falhas = ? WHERE id = ?')->execute([$enviados, $falhas, $avisoId]);
-    logar('info', 'push', 'push_enviado', "Aviso \"$titulo\": $enviados enviados, $falhas falhas", ['aviso' => $avisoId, 'tipo' => $tipo, 'lado' => $lado]);
+    logar($usuarioId ? 'debug' : 'info', 'push', 'push_enviado', "Aviso \"$titulo\": $enviados enviados, $falhas falhas", ['aviso' => $avisoId, 'tipo' => $tipo, 'lado' => $lado]);
     return ['id' => $avisoId, 'enviados' => $enviados, 'falhas' => $falhas];
 }
 
@@ -171,7 +177,7 @@ function push_resumo(): array
     return [
         'inscritos' => (int) db()->query('SELECT COUNT(*) FROM push_inscricoes')->fetchColumn(),
         'porLado'   => db()->query("SELECT COALESCE(lado, '?'), COUNT(*) FROM push_inscricoes GROUP BY lado")->fetchAll(PDO::FETCH_KEY_PAIR),
-        'avisos'    => db()->query('SELECT * FROM push_avisos ORDER BY id DESC LIMIT 5')->fetchAll(),
+        'avisos'    => db()->query("SELECT * FROM push_avisos WHERE tipo IN ('enquete', 'placar') ORDER BY id DESC LIMIT 5")->fetchAll(),
     ];
 }
 

@@ -90,6 +90,13 @@ if (!defined('LOG_HANDLERS')) {
     set_exception_handler(function (Throwable $e) {
         logar('erro', 'sistema', 'php_excecao', get_class($e) . ': ' . $e->getMessage(),
             ['arquivo' => str_replace(dirname(__DIR__), '', $e->getFile()), 'linha' => $e->getLine(), 'pilha' => mb_substr($e->getTraceAsString(), 0, 2000)], null, false, 500);
+        // página: tela de erro 500 com botão para a página inicial (includes/erro.php); API, terminal ou página
+        // já no meio do envio: só o recado curto
+        $api = str_contains((string) ($_SERVER['SCRIPT_NAME'] ?? ''), '/api/');
+        if (PHP_SAPI !== 'cli' && !$api && !headers_sent()) {
+            require_once __DIR__ . '/erro.php';
+            pagina_erro(500);
+        }
         if (!headers_sent()) {
             http_response_code(500);
         }

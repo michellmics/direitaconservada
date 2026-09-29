@@ -8,7 +8,7 @@
 
   <div class="toast" id="toast" hidden></div>
   <script src="<?= asset('assets/js/visitas.js') ?>" data-lado="<?= e($S['slug']) ?>" defer></script>
-  <script src="<?= asset('assets/js/push.js') ?>" data-lado="<?= e($S['slug']) ?>" defer></script>
+  <script src="<?= asset('assets/js/push.js') ?>" data-lado="<?= e($S['slug']) ?>" data-conta="<?= (int) ($U['id'] ?? 0) ?>" defer></script>
 
   <?php if ($comCompra): // só as páginas de pote e perfil usam o app.js ?>
   <?php
