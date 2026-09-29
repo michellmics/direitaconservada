@@ -1176,7 +1176,8 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .partidos-sub { margin: 0 0 16px; color: var(--muted); font-size: .92rem; }
 .partidos-grid { display: flex; flex-direction: column; gap: 14px; }
 /* 1ª linha: os principais (PT, PL, Missão, PSOL, REDE), maiores; depois os demais */
-.partidos-destaque { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.partidos-destaque { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.partidos-destaque .partido { aspect-ratio: 1.7; } /* retangulares: cabe MISSÃO numa linha */
 .partidos-destaque .partido-sigla { font-size: 1.45rem; }
 .partidos-destaque .partido-sigla.is-media { font-size: 1.05rem; }
 .partidos-destaque .partido-sigla.is-longa { font-size: 1rem; line-height: 1.05; }

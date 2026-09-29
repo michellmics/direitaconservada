@@ -5,7 +5,7 @@
 require_once __DIR__ . '/db.php';
 
 const PARTIDOS_MAX = 3;
-const PARTIDOS_DESTAQUE = 5;  // 1ª linha: PT, PL, Missão, PSOL, REDE
+const PARTIDOS_DESTAQUE = 4;  // 1ª linha: PT, PL, Missão, PSOL (botões retangulares)
 const PARTIDOS_VISIVEIS = 11; // os demais aparecem no "Exibir mais"
 
 /** Partidos ativos, na ordem dos quadrados. */
