@@ -1553,7 +1553,7 @@
       ${avatarWithSelo(eu, 'comment-avatar')}
       <div class="comment-box">
         <textarea name="texto" rows="3" maxlength="400" aria-label="Seu comentário"
-          placeholder="Comentar como ${esc(eu.nome.split(' ')[0])} (${sd.emoji} ${esc(sd.name)})… ou cole um link de vídeo"></textarea>
+          placeholder="Comentar..."></textarea>
         <div class="comment-box-foot">
           <small class="comment-hint">${DICA_COMENTARIO}</small>
           <span class="comment-count">0/${COMENTARIO_MAX}</span>
