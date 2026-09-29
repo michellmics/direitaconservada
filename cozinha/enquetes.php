@@ -58,6 +58,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('Enquete no ar. A anterior foi encerrada.');
                 header('Location: enquetes');
                 exit;
+            case 'avisar': // notificação do app: "enquete nova" para os inscritos do(s) pote(s) onde ela aparece
+                require_once dirname(__DIR__) . '/includes/push.php';
+                $e = enquete_ativa();
+                if (!$e) {
+                    flash('Nenhuma enquete no ar para avisar.', 'erro');
+                    header('Location: enquetes');
+                    exit;
+                }
+                $enviados = 0;
+                foreach ($e['lado'] ? [$e['lado']] : array_keys(SIDES) as $l) {
+                    $enviados += push_avisar('enquete', '🗳️ Enquete nova no pote!', $e['pergunta'], $l . '#enquete', $l)['enviados'];
+                }
+                push_config('enquete_avisada', (string) $e['id']);
+                flash($enviados ? "🔔 Aviso enviado para $enviados aparelho(s)." : 'Ninguém inscrito nos avisos ainda.');
+                header('Location: enquetes');
+                exit;
             case 'encerrar':
                 enquete_encerrar($id);
                 logar('info', 'painel', 'enquete_encerrada', "Enquete #$id encerrada", ['id' => $id], null, true);
@@ -85,11 +101,18 @@ $flash = flash();
 $dbErro = null;
 $ativa = null;
 $historico = [];
+$push = null;
 if ($logado) {
     try {
         $todas = enquetes_listar();
         foreach ($todas as $e) {
             $e['status'] === 'ativa' ? $ativa = $e : $historico[] = $e;
+        }
+        try { // notificações do app (migration 025): sem as tabelas, o painel segue sem o botão
+            require_once dirname(__DIR__) . '/includes/push.php';
+            $push = push_resumo() + ['avisada' => push_config('enquete_avisada')];
+        } catch (Throwable $ex) {
+            $push = null;
         }
     } catch (PDOException $ex) {
         $dbErro = str_contains($ex->getMessage(), "doesn't exist")
@@ -230,8 +253,19 @@ while (count($opcoesForm) < 2) {
               <span><?= e(resultado_label($ativa['resultado'])) ?></span>
             </div>
             <div class="adm-actions">
+              <?php if ($push !== null): $jaAvisou = $push['avisada'] === (string) $ativa['id']; ?>
+                <?= acao_form('avisar', (int) $ativa['id'], $jaAvisou ? '🔔 Avisar de novo' : '🔔 Avisar inscritos (' . num($push['inscritos']) . ')', $jaAvisou ? 'btn-ghost' : 'btn-gold',
+                    ($jaAvisou ? 'Você JÁ avisou desta enquete. ' : '') . 'Mandar a notificação "Enquete nova" para ' . $push['inscritos'] . ' aparelho(s)?') ?>
+              <?php endif; ?>
               <?= acao_form('encerrar', (int) $ativa['id'], 'Encerrar agora', 'btn-ghost', 'Encerrar esta enquete? Ela sai dos potes.') ?>
             </div>
+            <?php if ($push && $push['avisos']): ?>
+              <p class="adm-meta">🔔 Últimos avisos:
+                <?php foreach (array_slice($push['avisos'], 0, 3) as $a): ?>
+                  <span><?= data_br($a['criado_em']) ?> · <?= e($a['tipo']) ?><?= $a['lado'] ? ' (' . e($a['lado']) . ')' : '' ?>: <b><?= num($a['enviados']) ?></b> enviados, <b><?= num($a['recebidos']) ?></b> recebidos, <b><?= num($a['cliques']) ?></b> abriram</span>
+                <?php endforeach; ?>
+              </p>
+            <?php endif; ?>
           </article>
         <?php else: ?>
           <div class="adm-card adm-empty">Nenhuma enquete no ar. Crie uma abaixo.</div>

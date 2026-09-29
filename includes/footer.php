@@ -2,11 +2,13 @@
   <footer class="footer">
     <?php if ($fraseRodape = frase('rodape', $S['slug'])): ?><p class="rodape-piada"><?= e($fraseRodape) ?></p><?php endif; ?>
     <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
+    <button type="button" class="push-botao" data-push hidden>🔔 Receber avisos</button>
     <p><b><?= e($S['name']) ?></b> · <a href="./">Trocar de pote</a> · © <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
   </footer>
 
   <div class="toast" id="toast" hidden></div>
   <script src="<?= asset('assets/js/visitas.js') ?>" data-lado="<?= e($S['slug']) ?>" defer></script>
+  <script src="<?= asset('assets/js/push.js') ?>" data-lado="<?= e($S['slug']) ?>" defer></script>
 
   <?php if ($comCompra): // só as páginas de pote e perfil usam o app.js ?>
   <?php

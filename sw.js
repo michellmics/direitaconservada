@@ -3,7 +3,7 @@
 // - CSS, JS, imagens e fontes: do cache na hora e atualiza em segundo plano (o ?v= muda quando o arquivo muda).
 // - API, painel (/cozinha/) e qualquer coisa que não seja GET: nunca passam pelo cache.
 // Mudou este arquivo? Troque a VERSAO para os aparelhos pegarem a nova versão.
-const VERSAO = 'pote-v1';
+const VERSAO = 'pote-v2';
 const OFFLINE = 'offline.html';
 const PRECACHE = [OFFLINE, 'assets/img/icon-192.png', 'assets/img/logo-vs.png'];
 
@@ -47,4 +47,52 @@ self.addEventListener('fetch', (e) => {
       return guardado || daRede;
     })),
   );
+});
+
+// ---------- notificações (Web Push, includes/push.php) ----------
+// O push chega sem conteúdo: o service worker pergunta a api/push qual é o aviso deste aparelho e mostra.
+// Sem rede na hora, mostra um aviso genérico (o navegador exige mostrar algo a cada push).
+const api = (acao, dados) => fetch(new URL('api/push', self.registration.scope), {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao, ...dados }),
+});
+
+self.addEventListener('push', (e) => {
+  e.waitUntil((async () => {
+    let a = { titulo: 'Pote Político', texto: 'Tem novidade no pote. Venha ver!', url: './', aviso: 0 };
+    try {
+      const inscricao = await self.registration.pushManager.getSubscription();
+      const r = await api('ver', { endpoint: inscricao?.endpoint || '' });
+      if (r.ok) a = await r.json();
+    } catch { /* fica o aviso genérico */ }
+    await self.registration.showNotification(a.titulo, {
+      body: a.texto,
+      icon: 'assets/img/icon-192.png',
+      badge: 'assets/img/favicon-32.png',
+      tag: 'pote-aviso', // um aviso novo substitui o anterior (não empilha)
+      data: { url: new URL(a.url, self.registration.scope).href, aviso: a.aviso },
+    });
+  })());
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const { url, aviso } = e.notification.data || {};
+  e.waitUntil((async () => {
+    if (aviso) api('clique', { aviso }).catch(() => {});
+    const abertas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const aba = abertas.find((c) => c.url.startsWith(self.registration.scope));
+    if (aba) { await aba.focus(); return aba.navigate(url).catch(() => self.clients.openWindow(url)); }
+    return self.clients.openWindow(url || self.registration.scope);
+  })());
+});
+
+// o navegador trocou a inscrição sozinho (raro): inscreve de novo com a mesma chave
+self.addEventListener('pushsubscriptionchange', (e) => {
+  e.waitUntil((async () => {
+    const r = await fetch(new URL('api/push', self.registration.scope));
+    const { chave } = await r.json();
+    const b = atob(chave.replace(/-/g, '+').replace(/_/g, '/'));
+    const nova = await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Uint8Array.from(b, (c) => c.charCodeAt(0)) });
+    await api('inscrever', { endpoint: nova.endpoint });
+  })().catch(() => {}));
 });

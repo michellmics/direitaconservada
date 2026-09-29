@@ -7,6 +7,7 @@
 //   - resumo diário (a partir das 8h, uma vez por dia)
 //   - clientes: aviso de vencimento 30, 15, 10, 5 e 1 dia(s) antes (das 9h às 20h)
 //   - banco fora do ar → alerta direto (no máximo 1 por hora)
+//   - notificações do app: virada no placar (includes/push.php)
 //
 //   GET /cron/alertas?chave=<ENV_CRON_CHAVE do .env>     (pela web; sem ENV_CRON_CHAVE no .env fica desligada)
 //   php cron/alertas.php                                 (pelo terminal: não precisa de chave)
@@ -52,6 +53,8 @@ $rotinas = [
     'presentes'   => fn() => alertas_presentes(),
     'resumo'      => fn() => alerta_resumo_diario($forcarResumo),
     'vencimentos' => fn() => vencimentos_avisar(),
+    // notificações do app: virada no placar avisa o pote que ficou para trás (includes/push.php, migration 025)
+    'push_placar' => function () { require_once dirname(__DIR__) . '/includes/push.php'; return push_placar(); },
 ];
 $saida = [];
 foreach ($rotinas as $nome => $rotina) {

@@ -1741,3 +1741,25 @@ html.pwa-travado { overflow: hidden; }
   .vis-kpi strong { font-size: 1.7rem; }
   .vis-canvas-alto { height: 260px; }
 }
+
+/* ---------- notificações do app (assets/js/push.js) ---------- */
+.push-botao {
+  display: block; margin: 0 auto 14px; padding: .5em 1.1em; border-radius: 99px; cursor: pointer;
+  font: 600 .85rem var(--sans, sans-serif); color: var(--gold-2); background: transparent; border: 1px solid var(--line);
+}
+.push-botao:hover { border-color: var(--gold); }
+.push-botao[hidden] { display: none; }
+.push-convite {
+  position: fixed; left: 50%; bottom: 16px; z-index: 70; width: min(calc(100vw - 32px), 460px);
+  display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: center; padding: 16px 18px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--gold); border-radius: 18px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.55); transform: translate(-50%, 140%); transition: transform .3s cubic-bezier(.2,.9,.3,1.2);
+}
+.push-convite.is-aberto { transform: translate(-50%, 0); }
+.push-convite-sino { font-size: 1.9rem; animation: push-sino 1.2s ease-in-out 2; transform-origin: 50% 10%; }
+@keyframes push-sino { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(18deg); } 40% { transform: rotate(-14deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
+.push-convite b { display: block; font-size: .98rem; }
+.push-convite small { display: block; color: var(--muted); font-size: .82rem; margin-top: 2px; }
+.push-convite-acoes { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.push-convite-nao { background: none; border: 0; color: var(--muted); font: 600 .85rem var(--sans, sans-serif); cursor: pointer; padding: .5em .8em; }
+@media (prefers-reduced-motion: reduce) { .push-convite { transition: none; } .push-convite-sino { animation: none; } }

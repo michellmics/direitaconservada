@@ -2063,7 +2063,10 @@
       if (data.login) { location.href = DC.loginUrl; return; } // sessão expirou
       if (data.erro) toast(data.erro);
       DC.enquete = data.enquete || (data.erro ? DC.enquete : data);
-      if (!data.erro) toast('Voto registrado!');
+      if (!data.erro) {
+        toast('Voto registrado!');
+        document.dispatchEvent(new CustomEvent('dc:votou')); // push.js: convite para receber avisos
+      }
     } catch {
       toast('Não foi possível votar agora. Tente de novo.');
     }
