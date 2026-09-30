@@ -7,7 +7,7 @@ $paginas = [url_base() => '1.0'];
 foreach (array_keys(SIDES) as $slug) {
     $paginas[url_base() . $slug] = '0.9';
 }
-// Tretódromo: a arena e os duelos que aconteceram (os 500 mais recentes; desafio recusado/expirado fica de fora)
+// Tretódromo: a arena e os duelos que aconteceram (os 500 mais recentes; desafio recusado/expirado fica de fora ok)
 $paginas[url_base() . 'tretodromo'] = '0.8';
 try {
     foreach (db()->query("SELECT id FROM duelos WHERE status IN ('andamento', 'votacao', 'encerrado') ORDER BY id DESC LIMIT 500")->fetchAll(PDO::FETCH_COLUMN) as $id) {
