@@ -19,6 +19,8 @@ const DUELO_ARG_MAX = 500;
 const DUELO_ABERTOS_MAX = 3;   // desafios aguardando aceite, por pessoa
 const DUELO_POR_DIA = 5;       // desafios lançados por pessoa em 24 h
 const DUELO_RODADAS = ['Abertura', 'Réplica', 'Tréplica'];
+const DUELO_POR_PAGINA = 24;   // duelos por vez nas abas da arena ("Carregar mais" traz os próximos)
+const DUELO_LIMPAR_DIAS = 30;  // desafios expirados/recusados saem do banco depois disso (cron)
 const DUELO_ANUNCIO_HORAS = 6; // aviso geral "duelo começou" (push para todos): no máximo 1 a cada 6 h, das 9h às 22h
 
 // dados do duelo com os dois itens (nome, pote, número, estado, dono)
@@ -337,15 +339,25 @@ function duelo_buscar_oponentes(string $lado, string $q, int $usuarioId): array
 }
 
 /** Lista para a arena: 'aovivo' (andamento + votação), 'aguardando' ou 'encerrados'. */
-function duelos_listar(string $filtro, int $limite = 24): array
+function duelos_listar(string $filtro, int $limite = DUELO_POR_PAGINA, int $pular = 0): array
 {
     $onde = match ($filtro) {
         'aguardando' => "d.status = 'aguardando'",
         'encerrados' => "d.status = 'encerrado'",
         default      => "d.status IN ('andamento', 'votacao')",
     };
-    $ordem = $filtro === 'encerrados' ? 'd.encerrado_em DESC' : '(d.votos_a + d.votos_b) DESC, d.criado_em DESC';
-    return db()->query(DUELO_SQL . " WHERE $onde ORDER BY $ordem LIMIT " . (int) $limite)->fetchAll();
+    $ordem = $filtro === 'encerrados' ? 'd.encerrado_em DESC, d.id DESC' : '(d.votos_a + d.votos_b) DESC, d.criado_em DESC, d.id DESC';
+    return db()->query(DUELO_SQL . " WHERE $onde ORDER BY $ordem LIMIT " . (int) $limite . ' OFFSET ' . max(0, $pular))->fetchAll();
+}
+
+/**
+ * Cron: apaga do banco os desafios que não aconteceram (expirados e recusados) há mais de DUELO_LIMPAR_DIAS dias.
+ * Duelos que aconteceram (encerrados) ficam: têm página própria e estão no Google.
+ */
+function duelos_limpar(): int
+{
+    return db()->exec("DELETE FROM duelos WHERE status IN ('expirado', 'recusado')
+                       AND encerrado_em < NOW() - INTERVAL " . DUELO_LIMPAR_DIAS . ' DAY LIMIT 500'); // argumentos e votos vão junto (ON DELETE CASCADE)
 }
 
 /** Duelos da pessoa que pedem atenção (desafio para aceitar, vez de responder) e os em aberto. */

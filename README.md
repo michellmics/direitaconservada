@@ -119,6 +119,8 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 - Grátis: para desafiar ou aceitar basta ter uma azeitona ou pimenta ativa; sempre contra alguém do outro pote.
   Aceite em 24 h → 3 rodadas (24 h por resposta; sem resposta = W.O.) → 24 h de votação (qualquer conta logada,
   menos os duelistas). Prazos vencidos: `duelos_atualizar()` ao abrir as páginas e na cron.
+- Arena leve: cada aba mostra 24 duelos ("Carregar mais" traz os próximos); desafio expirado/recusado some da tela
+  na hora e sai do banco depois de 30 dias (`duelos_limpar()`, cron).
 - Avisos por push (e e-mail no desafio recebido). Card de vitória em PNG gerado no navegador (`assets/js/duelo.js`).
 
 ## Alertas para o administrador (migration 020)

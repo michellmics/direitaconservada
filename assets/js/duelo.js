@@ -97,6 +97,34 @@
     });
   }
 
+  // ---------- arena: "Carregar mais" (traz os próximos cards sem sair da página) ----------
+  $('[data-mais]')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    const botao = e.currentTarget;
+    botao.setAttribute('aria-disabled', 'true');
+    botao.textContent = 'Carregando…';
+    try {
+      const url = new URL(botao.href);
+      url.searchParams.set('parcial', '1');
+      const r = await fetch(url, { credentials: 'same-origin' });
+      if (!r.ok || !r.headers.has('X-Tem-Mais')) throw new Error(); // sem o cabeçalho = veio a página inteira (erro): não mistura
+      $('[data-lista]').insertAdjacentHTML('beforeend', await r.text());
+      if (r.headers.get('X-Tem-Mais') === '1') {
+        url.searchParams.delete('parcial');
+        url.searchParams.set('p', String(Number(url.searchParams.get('p') || 1) + 1));
+        botao.href = url.pathname.split('/').pop() + url.search;
+        botao.textContent = 'Carregar mais';
+        botao.removeAttribute('aria-disabled');
+      } else {
+        botao.remove();
+      }
+    } catch {
+      botao.textContent = 'Carregar mais';
+      botao.removeAttribute('aria-disabled');
+      toast('Não deu para carregar agora. Tente de novo.');
+    }
+  });
+
   // ---------- página do duelo ----------
   document.addEventListener('click', async (e) => {
     const acao = e.target.closest('[data-acao]');

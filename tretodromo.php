@@ -8,6 +8,9 @@ require __DIR__ . '/partials/arena.php';
 
 $U = current_user();
 $filtro = in_array($_GET['f'] ?? '', ['aguardando', 'encerrados'], true) ? $_GET['f'] : 'aovivo';
+$pagina = max(1, min(500, (int) ($_GET['p'] ?? 1)));
+$parcial = !empty($_GET['parcial']);
+$temMais = false;
 $P = rota_params();
 $erroBanco = false;
 $lista = $meus = $meusItens = [];
@@ -15,7 +18,17 @@ $ranking = ['gladiadores' => [], 'potes' => []];
 $contra = null;
 try {
     duelos_atualizar();
-    $lista = duelos_listar($filtro);
+    $lista = duelos_listar($filtro, DUELO_POR_PAGINA + 1, ($pagina - 1) * DUELO_POR_PAGINA); // 1 a mais: dá para saber se tem próxima página
+    $temMais = count($lista) > DUELO_POR_PAGINA;
+    $lista = array_slice($lista, 0, DUELO_POR_PAGINA);
+    if ($parcial) { // "Carregar mais" (duelo.js): só os cards da próxima página
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Tem-Mais: ' . ($temMais ? '1' : '0'));
+        foreach ($lista as $d) {
+            echo arena_card($d);
+        }
+        exit;
+    }
     $ranking = duelos_ranking();
     $contagem = db()->query("SELECT SUM(status IN ('andamento', 'votacao')), SUM(status = 'aguardando') FROM duelos")->fetch(PDO::FETCH_NUM);
     if ($U) {
@@ -86,7 +99,10 @@ arena_inicio('Tretódromo: duelos de debate direita × esquerda | Pote Político
         <?php endforeach; ?>
       </nav>
       <?php if ($lista): ?>
-        <div class="arena-lista"><?php foreach ($lista as $d) echo arena_card($d); ?></div>
+        <div class="arena-lista" data-lista><?php foreach ($lista as $d) echo arena_card($d); ?></div>
+        <?php if ($temMais): // sem JS, é um link comum para a próxima página; com JS, os cards entram aqui mesmo ?>
+          <a class="btn btn-ghost arena-mais" data-mais href="tretodromo?<?= e(http_build_query(array_filter(['f' => $filtro === 'aovivo' ? null : $filtro, 'p' => $pagina + 1]))) ?>">Carregar mais</a>
+        <?php endif; ?>
       <?php else: ?>
         <p class="arena-vazio"><?= $filtro === 'encerrados' ? 'Nenhum duelo terminou ainda.' : ($filtro === 'aguardando' ? 'Nenhum desafio esperando resposta.' : 'Nenhum duelo rolando agora. Que tal começar um?') ?></p>
       <?php endif; ?>
