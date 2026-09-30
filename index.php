@@ -75,6 +75,8 @@ $total = array_sum($count);
       <div class="score-side" style="<?= theme_vars(side('direita')) ?>"><b><?= num($count['direita']) ?></b> <?= side('direita')['emoji'] ?></div>
       <small>Placar dos potes · capacidade de <?= num(JAR_CAPACITY) ?> em cada um</small>
     </section>
+
+    <?php require __DIR__ . '/partials/tretodromo-destaque.php'; ?>
   </main>
 
   <footer class="footer">

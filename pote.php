@@ -81,6 +81,7 @@ require __DIR__ . '/includes/header.php';
   <?php if ($extraJs['partidos']) require __DIR__ . '/partials/partidos.php'; ?>
   <?php require __DIR__ . '/partials/mapa.php'; ?>
   <?php require __DIR__ . '/partials/ranking.php'; ?>
+  <div class="td-secao"><?php require __DIR__ . '/partials/tretodromo-destaque.php'; ?></div>
   <?php require __DIR__ . '/partials/mural.php'; ?>
   <section class="section poll-section" id="enquete" hidden>
     <div class="poll" id="poll"></div>

@@ -6,7 +6,9 @@
 //   após o 6º argumento, DUELO_HORAS h de votação. Votar: qualquer conta logada, menos os dois duelistas
 //   (vale durante o duelo todo; dá para mudar o voto). Empate nos votos = empate.
 //   Prazos vencidos são resolvidos por duelos_atualizar() (ao abrir as páginas e pela cron).
-// Avisos (push + e-mail): desafio recebido, sua vez, desafio aceito/recusado e resultado.
+// Avisos aos duelistas: push em tudo (desafio recebido, aceito/recusado, sua vez, votação, resultado);
+// e-mail só no que pede ação ou é o desfecho (desafio recebido, sua vez, resultado).
+// Aviso geral "duelo começou" (push para todos os inscritos): duelo_anunciar(), com limite de frequência.
 require_once __DIR__ . '/db.php';
 
 const DUELO_HORAS = 24;
@@ -17,6 +19,7 @@ const DUELO_ARG_MAX = 500;
 const DUELO_ABERTOS_MAX = 3;   // desafios aguardando aceite, por pessoa
 const DUELO_POR_DIA = 5;       // desafios lançados por pessoa em 24 h
 const DUELO_RODADAS = ['Abertura', 'Réplica', 'Tréplica'];
+const DUELO_ANUNCIO_HORAS = 6; // aviso geral "duelo começou" (push para todos): no máximo 1 a cada 6 h, das 9h às 22h
 
 // dados do duelo com os dois itens (nome, pote, número, estado, dono)
 const DUELO_SQL = "SELECT d.*,
@@ -119,7 +122,7 @@ function duelo_encerrar(int $id): void
             default => ['😤 Você perdeu o duelo', ($wo ? 'O prazo para responder acabou. ' : 'A plateia preferiu ' . nome_proprio($d[$outro . '_nome']) . '. ')
                 . 'Quer revanche? Lance um novo desafio.'],
         };
-        duelo_avisar((int) $d[$l . '_uid'], $d[$l . '_lado'], $titulo, $texto, $id);
+        duelo_avisar((int) $d[$l . '_uid'], $d[$l . '_lado'], $titulo, $texto, $id, true);
     }
 }
 
@@ -204,7 +207,40 @@ function duelo_responder_desafio(int $usuarioId, int $id, bool $aceitar): array
     duelo_avisar((int) $d['a_uid'], $d['a_lado'],
         $aceitar ? "🔥 $bNome aceitou o seu desafio!" : "🐔 $bNome recusou o desafio",
         $aceitar ? "O duelo começou. Agora é a vez de $bNome responder à sua abertura." :'Amarelou! Desafie outra pessoa no Tretódromo.', $id);
+    if ($aceitar) {
+        duelo_anunciar($d);
+    }
     return ['ok' => true];
+}
+
+/**
+ * "Duelo começou!" para todos os inscritos no push (menos os dois duelistas). Contra excesso: no máximo 1 aviso
+ * geral a cada DUELO_ANUNCIO_HORAS e só entre 9h e 22h; fora disso, o duelo fica só no destaque do site.
+ */
+function duelo_anunciar(array $d): void
+{
+    $hora = (int) date('G');
+    if ($hora < 9 || $hora >= 22) {
+        return;
+    }
+    register_shutdown_function(function () use ($d) {
+        try {
+            require_once __DIR__ . '/push.php';
+            $pdo = db();
+            $pdo->exec("INSERT IGNORE INTO push_config (chave, valor) VALUES ('duelo_anuncio_em', '0')");
+            // reserva a vez de forma atômica: dois duelos aceitos juntos não disparam dois avisos
+            $st = $pdo->prepare("UPDATE push_config SET valor = ? WHERE chave = 'duelo_anuncio_em' AND CAST(valor AS UNSIGNED) < ?");
+            $st->execute([(string) time(), time() - DUELO_ANUNCIO_HORAS * 3600]);
+            if ($st->rowCount() !== 1) {
+                return;
+            }
+            push_avisar('duelo_geral', '⚔️ Duelo começou no Tretódromo!',
+                nome_proprio($d['a_nome']) . ' × ' . nome_proprio($d['b_nome']) . ': "' . mb_strimwidth($d['tema'], 0, 90, '…') . '". Venha ler e votar!',
+                duelo_link((int) $d['id']), null, null, [(int) $d['a_uid'], (int) $d['b_uid']]);
+        } catch (Throwable $e) {
+            // push indisponível (migration 025): o duelo segue normal
+        }
+    });
 }
 
 /** Argumento de quem está na vez. Depois do 6º, abre a votação. */
@@ -247,7 +283,7 @@ function duelo_argumentar(int $usuarioId, int $id, string $texto): array
         }
     } else {
         duelo_avisar((int) $d[$outro . '_uid'], $d[$outro . '_lado'], "⏰ Sua vez! $nome respondeu no duelo",
-            '"' . mb_strimwidth($texto, 0, 120, '…') . '" Você tem ' . DUELO_HORAS . ' h para responder, senão perde por W.O.', $id);
+            '"' . mb_strimwidth($texto, 0, 120, '…') . '" Você tem ' . DUELO_HORAS . ' h para responder, senão perde por W.O.', $id, true);
     }
     return ['ok' => true];
 }
@@ -356,7 +392,7 @@ function duelo_falta(string $quando): string
 }
 
 /**
- * Avisa um duelista: notificação do app (push) e e-mail (só no desafio recebido e quando a pessoa não desligou
+ * Avisa um duelista: notificação do app (push) e, com $email, e-mail (se a pessoa não desligou
  * os avisos por e-mail). Roda depois da resposta ir para o navegador; falhar não afeta o duelo.
  */
 function duelo_avisar(int $usuarioId, string $lado, string $titulo, string $texto, int $dueloId, bool $email = false): void

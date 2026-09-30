@@ -1782,7 +1782,7 @@ html.pwa-travado { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .erro-pote span { animation: none; } }
 
 /* ---------- Tretódromo: arena de duelos (tretodromo.php, duelo.php, partials/arena.php) ---------- */
-.arena-page { --a-linha: #2a221b; --a-sup: #1a140f; --a-suave: #b9ad9a; --a-ouro: #e7c54d;
+.arena-page, .td-destaque { --a-linha: #2a221b; --a-sup: #1a140f; --a-suave: #b9ad9a; --a-ouro: #e7c54d;
   --d-fundo: #1f2811; --d-borda: #3f4d2a; --d-cor: #e7c54d; --d-forte: #c9a227;
   --e-fundo: #27110e; --e-borda: #5c2a24; --e-cor: #ff7a5c; --e-forte: #e0563f; }
 .c-direita { color: var(--d-cor); } .c-esquerda { color: var(--e-cor); }
@@ -1932,6 +1932,30 @@ html.pwa-travado { overflow: hidden; }
 .duelo-votar.tema-esquerda.is-meu { background: var(--e-cor); color: #2a0a04; }
 .duelo-compartilhar { margin-top: 28px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .perfil-desafiar { margin-top: 14px; }
+
+/* destaque do Tretódromo na página inicial e nos potes (partials/tretodromo-destaque.php) */
+.td-secao { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+.td-destaque {
+  max-width: 820px; margin: 36px auto 8px; padding: 26px 28px; border-radius: 24px; text-align: center; color: #f4ecd8;
+  background: radial-gradient(420px 180px at 50% 0%, rgba(231,197,77,.14), transparent 70%), #1a140f; border: 1px solid #6b5720;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.td-cabeca { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
+.td-marca { display: inline-flex; align-items: center; gap: 8px; color: var(--a-ouro); font: 800 1.1rem var(--serif); letter-spacing: .02em; }
+.td-destaque h2 { margin: 0; font: 800 clamp(1.3rem, 3.6vw, 1.8rem)/1.2 var(--serif); display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.td-destaque h2 .arena-ic { color: var(--a-ouro); }
+.td-vs { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .95rem; }
+.td-vs span { display: inline-flex; align-items: center; gap: 6px; }
+.td-vs em { font: italic 900 1.3rem var(--serif); color: var(--a-ouro); }
+.td-destaque .arena-barra { width: 100%; }
+.td-sub { margin: 0; color: var(--a-suave); max-width: 560px; }
+.td-sub a { color: var(--a-ouro); }
+.td-acoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.td-destaque .btn-ghost { color: #f4ecd8; }
+@media (max-width: 640px) {
+  .td-destaque { padding: 20px 16px; }
+  .td-vs { flex-direction: column; gap: 4px; }
+}
 
 @media (max-width: 900px) {
   .arena-grade { grid-template-columns: 1fr; }

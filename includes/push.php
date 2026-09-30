@@ -110,10 +110,13 @@ function push_desinscrever(string $endpoint): void
  * (aviso pessoal: sem aparelho inscrito, nada é criado). Envia em lotes paralelos (curl_multi);
  * endpoint que não existe mais (404/410) sai da lista. Retorna ['id', 'enviados', 'falhas'].
  */
-function push_avisar(string $tipo, string $titulo, string $texto, string $url, ?string $lado = null, ?int $usuarioId = null): array
+function push_avisar(string $tipo, string $titulo, string $texto, string $url, ?string $lado = null, ?int $usuarioId = null, array $exceto = []): array
 {
     $pdo = db();
-    [$onde, $params] = $usuarioId ? [' WHERE usuario_id = ?', [$usuarioId]] : ($lado ? [' WHERE lado = ?', [$lado]] : ['', []]);
+    [$onde, $params] = $usuarioId ? [' WHERE usuario_id = ?', [$usuarioId]] : ($lado ? [' WHERE lado = ?', [$lado]] : [' WHERE 1', []]);
+    if ($exceto = array_values(array_filter(array_map('intval', $exceto)))) { // ex.: os próprios duelistas no aviso geral
+        $onde .= ' AND (usuario_id IS NULL OR usuario_id NOT IN (' . implode(',', $exceto) . '))';
+    }
     $st = $pdo->prepare('SELECT id, endpoint FROM push_inscricoes' . $onde);
     $st->execute($params);
     $alvos = $st->fetchAll();
@@ -177,7 +180,7 @@ function push_resumo(): array
     return [
         'inscritos' => (int) db()->query('SELECT COUNT(*) FROM push_inscricoes')->fetchColumn(),
         'porLado'   => db()->query("SELECT COALESCE(lado, '?'), COUNT(*) FROM push_inscricoes GROUP BY lado")->fetchAll(PDO::FETCH_KEY_PAIR),
-        'avisos'    => db()->query("SELECT * FROM push_avisos WHERE tipo IN ('enquete', 'placar') ORDER BY id DESC LIMIT 5")->fetchAll(),
+        'avisos'    => db()->query("SELECT * FROM push_avisos WHERE tipo IN ('enquete', 'placar', 'duelo_geral') ORDER BY id DESC LIMIT 5")->fetchAll(),
     ];
 }
 
