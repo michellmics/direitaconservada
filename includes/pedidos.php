@@ -310,7 +310,7 @@ function pedido_criar(array $in, ?array $logado, string $ip): array
         $insItem = $pdo->prepare("INSERT INTO itens (lado, numero, usuario_id, pedido_item_id, presente_token, item_tipo_id, nome, cidade, uf, frase,
                                                      foto_path, selo_tipo, selo_valor, desde, valido_ate, status)
                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), CURDATE() + INTERVAL 1 YEAR, 'pendente')");
-        $insPost = $pdo->prepare('INSERT INTO posts (lado, item_id, texto, is_frase_compra) VALUES (?, ?, ?, 1)');
+        $insPost = $pdo->prepare('INSERT INTO posts (lado, item_id, usuario_id, texto, is_frase_compra) VALUES (?, ?, ?, ?, 1)');
         // frase que a pessoa já tem no mural (compra anterior, com o cadastro) não vira post de novo
         $jaNoMural = $pdo->prepare("SELECT 1 FROM posts p JOIN itens i ON i.id = p.item_id
                                     WHERE i.usuario_id = ? AND p.lado = ? AND p.is_frase_compra = 1 AND p.status = 'publicado'
@@ -333,7 +333,7 @@ function pedido_criar(array $in, ?array $logado, string $ip): array
                 $insItem->execute([$lado, $numero + $k, $u['id'], $linhaId, $l['presente'] ? bin2hex(random_bytes(12)) : null, $l['item_tipo_id'], $l['nome'], $l['cidade'], $l['uf'],
                                    $l['frase'], $l['foto'], $l['selo_tipo'], $l['selo_valor']]);
                 if ($k === 0 && $postar) { // cópias do mesmo item não repetem a frase no mural
-                    $insPost->execute([$lado, $pdo->lastInsertId(), $l['frase']]);
+                    $insPost->execute([$lado, $pdo->lastInsertId(), $u['id'], $l['frase']]);
                     $comPost[] = $numero + $k;
                 }
                 $numeros[] = $numero + $k;

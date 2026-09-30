@@ -111,12 +111,13 @@ function banco_id_post(string $lado, array $r): string
     return $r['is_frase_compra'] ? "$lado-o{$r['numero']}" : "$lado-p{$r['post_id']}";
 }
 
-/** Post (linha com p.* e i.numero) → formato do JS. */
+/** Post (linha com p.* e i.numero) → formato do JS. Conta sem item: oliveId null e "autor" com o nome da conta. */
 function banco_post_js(string $lado, array $r): array
 {
     return [
         'id'      => banco_id_post($lado, $r),
-        'oliveId' => (int) $r['numero'],
+        'oliveId' => $r['numero'] !== null ? (int) $r['numero'] : null,
+        'autor'   => $r['numero'] === null ? ['nome' => (string) ($r['autor_nome'] ?? '')] : null,
         'text'    => (string) $r['texto'],
         'date'    => substr($r['criado_em'], 0, 10),
         'hora'    => $r['criado_em'], // desempate na ordem "recentes"
@@ -134,8 +135,10 @@ function banco_comentario_js(string $lado, array $r): array
         'id'        => "$lado-c{$r['id']}",
         'post'      => banco_id_post($lado, $r),
         'post_item' => (int) $r['numero'],
-        'autor'     => ['id' => (int) $r['autor_id'], 'side' => $r['autor_lado'], 'nome' => $r['autor_nome'],
+        // conta sem item: id 0 (sem perfil nem nível), no pote do post, com o nome da conta
+        'autor'     => ['id' => (int) $r['autor_id'], 'side' => $r['autor_lado'] ?? $lado, 'nome' => $r['autor_nome'],
                         'foto' => $r['autor_foto'], 'tipo' => $r['autor_tipo'], 'selo' => $r['autor_selo']],
+        'meu'       => banco_viewer() > 0 && (int) $r['autor_uid'] === banco_viewer(), // só quem escreveu apaga
         'texto'     => $apagado ? null : $r['texto'],
         'data'      => substr($r['criado_em'], 0, 10),
     ];
@@ -155,19 +158,21 @@ function banco_comentario_js(string $lado, array $r): array
 
 const BANCO_COMENTARIO_SQL = "SELECT c.id, c.texto, c.video_provider, c.video_id, c.video_vertical, c.status, c.criado_em,
                                      p.id AS post_id, p.lado AS post_lado, p.is_frase_compra, dono.numero,
-                                     quem.numero AS autor_id, quem.lado AS autor_lado, quem.nome AS autor_nome,
-                                     quem.foto_path AS autor_foto, t.slug AS autor_tipo, quem.selo_valor AS autor_selo,
-                                     c.cita_id, cc.texto AS cita_texto, cc.status AS cita_status, ci.nome AS cita_nome, cp.lado AS cita_lado
+                                     COALESCE(quem.numero, 0) AS autor_id, quem.lado AS autor_lado, COALESCE(quem.nome, qu.nome) AS autor_nome,
+                                     quem.foto_path AS autor_foto, t.slug AS autor_tipo, quem.selo_valor AS autor_selo, c.usuario_id AS autor_uid,
+                                     c.cita_id, cc.texto AS cita_texto, cc.status AS cita_status, COALESCE(ci.nome, cu.nome) AS cita_nome, cp.lado AS cita_lado
                               FROM comentarios c
                               LEFT JOIN comentarios cc ON cc.id = c.cita_id
                               LEFT JOIN itens ci       ON ci.id = cc.item_id
+                              LEFT JOIN usuarios cu    ON cu.id = cc.usuario_id
                               LEFT JOIN posts cp       ON cp.id = cc.post_id
                               JOIN posts p     ON p.id = c.post_id AND p.status = 'publicado'
-                              JOIN itens dono  ON dono.id = p.item_id
-                              JOIN itens quem  ON quem.id = c.item_id
-                               AND (quem.status IN ('ativo', 'vencido') OR (quem.status = 'pendente' AND quem.usuario_id = ?))
-                              JOIN item_tipos t ON t.id = quem.item_tipo_id
-                              WHERE c.status IN ('publicado', 'removido') ";
+                              LEFT JOIN itens dono ON dono.id = p.item_id
+                              JOIN usuarios qu ON qu.id = c.usuario_id
+                              LEFT JOIN itens quem ON quem.id = c.item_id
+                              LEFT JOIN item_tipos t ON t.id = quem.item_tipo_id
+                              WHERE c.status IN ('publicado', 'removido')
+                                AND (quem.id IS NULL OR quem.status IN ('ativo', 'vencido') OR (quem.status = 'pendente' AND quem.usuario_id = ?)) ";
 
 /** Posts que a pessoa curtiu (ids no formato do JS). */
 function banco_minhas_curtidas(int $usuarioId): array
@@ -176,7 +181,7 @@ function banco_minhas_curtidas(int $usuarioId): array
         return [];
     }
     $st = db()->prepare('SELECT p.id AS post_id, p.lado, p.is_frase_compra, i.numero
-                         FROM curtidas cu JOIN posts p ON p.id = cu.post_id JOIN itens i ON i.id = p.item_id
+                         FROM curtidas cu JOIN posts p ON p.id = cu.post_id LEFT JOIN itens i ON i.id = p.item_id
                          WHERE cu.usuario_id = ?');
     $st->execute([$usuarioId]);
     return array_map(fn($r) => banco_id_post($r['lado'], $r), $st->fetchAll());

@@ -429,10 +429,10 @@ function alertas_moderacao_conteudo(): array
     $secoes = [];
     $st = $pdo->query("SELECT u.id, u.nome, u.email, SUM(x.tipo = 'post') AS posts, SUM(x.tipo = 'comentario') AS comentarios,
                               SUBSTRING(MAX(x.texto), 1, 90) AS exemplo
-                       FROM (SELECT 'post' AS tipo, p.item_id, p.texto FROM posts p WHERE p.criado_em > NOW() - INTERVAL 15 MINUTE AND p.is_frase_compra = 0
+                       FROM (SELECT 'post' AS tipo, p.usuario_id, p.texto FROM posts p WHERE p.criado_em > NOW() - INTERVAL 15 MINUTE AND p.is_frase_compra = 0
                              UNION ALL
-                             SELECT 'comentario', c.item_id, c.texto FROM comentarios c WHERE c.criado_em > NOW() - INTERVAL 15 MINUTE) x
-                       JOIN itens i ON i.id = x.item_id JOIN usuarios u ON u.id = i.usuario_id
+                             SELECT 'comentario', c.usuario_id, c.texto FROM comentarios c WHERE c.criado_em > NOW() - INTERVAL 15 MINUTE) x
+                       JOIN usuarios u ON u.id = x.usuario_id
                        GROUP BY u.id, u.nome, u.email
                        HAVING posts >= " . ALERTA_MOD_POSTS . ' OR comentarios >= ' . ALERTA_MOD_COMENTARIOS);
     $linhas = [];

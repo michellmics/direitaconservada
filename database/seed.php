@@ -271,12 +271,14 @@ foreach (array_keys(SIDES) as $lado) {
     $pdo->prepare('UPDATE potes SET proximo_numero = ? WHERE slug = ?')->execute([$numero + 1, $lado]);
 }
 $lotes('INSERT INTO itens (lado, numero, usuario_id, item_tipo_id, nome, cidade, uf, frase, foto_path, selo_tipo, selo_valor, desde, valido_ate, status, criado_em)', $linhasItens);
-$itemId = []; // [lado][numero] = id
-foreach ($pdo->query("SELECT lado, numero, id FROM itens WHERE usuario_id IN ($usuariosSeed)") as $r) {
+$itemId = $itemDono = []; // [lado][numero] = id; [id] = usuario_id
+foreach ($pdo->query("SELECT lado, numero, id, usuario_id FROM itens WHERE usuario_id IN ($usuariosSeed)") as $r) {
     $itemId[$r['lado']][(int) $r['numero']] = (int) $r['id'];
+    $itemDono[(int) $r['id']] = (int) $r['usuario_id'];
 }
 foreach ($pessoas as &$p) {
     $p['item'] = $itemId[$p['lado']][$p['numeros'][0]]; // a 1ª azeitona: é com ela que a pessoa publica e comenta
+    $p['uid'] = $itemDono[$p['item']];
 }
 unset($p);
 $passo(count($linhasItens) . ' azeitonas e pimentas');
@@ -329,7 +331,7 @@ $posts = [
 $linhasPosts = [];
 $autoresPost = [];
 foreach ($pessoas as $i => $p) { // a frase da compra de cada um
-    $linhasPosts[] = [$p['lado'], $p['item'], $p['frase'], 1, $data($p['criado'])];
+    $linhasPosts[] = [$p['lado'], $p['item'], $p['uid'], $p['frase'], 1, $data($p['criado'])];
 }
 foreach (array_keys(SIDES) as $lado) { // e as publicações: poucos publicam muito, muitos publicam pouco
     $doLado = array_values(array_filter(array_keys($pessoas), fn($i) => $pessoas[$i]['lado'] === $lado));
@@ -337,11 +339,11 @@ foreach (array_keys(SIDES) as $lado) { // e as publicações: poucos publicam mu
     foreach ($doLado as $i) {
         $n = $pesado([0 => 52, 1 => 22, 2 => 11, 3 => 6, 5 => 4, 8 => 3, 14 => 2]);
         for ($k = 0; $k < $n; $k++) {
-            $linhasPosts[] = [$lado, $pessoas[$i]['item'], $humanizar($um($posts[$lado]), $lado), 0, $data($momento($pessoas[$i]['criado'], $agora))];
+            $linhasPosts[] = [$lado, $pessoas[$i]['item'], $pessoas[$i]['uid'], $humanizar($um($posts[$lado]), $lado), 0, $data($momento($pessoas[$i]['criado'], $agora))];
         }
     }
 }
-$lotes('INSERT INTO posts (lado, item_id, texto, is_frase_compra, criado_em)', $linhasPosts);
+$lotes('INSERT INTO posts (lado, item_id, usuario_id, texto, is_frase_compra, criado_em)', $linhasPosts);
 $todosPosts = $pdo->query("SELECT p.id, p.lado, p.item_id, p.is_frase_compra, UNIX_TIMESTAMP(p.criado_em) AS t
                            FROM posts p WHERE p.item_id IN ($itensSeed)")->fetchAll();
 $pessoaDoItem = [];
@@ -438,11 +440,11 @@ foreach ($todosPosts as $post) {
             $texto = explode(' ', $pessoas[$dono]['nome'])[0] . ', ' . mb_strtolower(mb_substr($texto, 0, 1)) . mb_substr($texto, 1);
         }
         $t = $momento($t, min($agora, $t + mt_rand(60, 3 * 86400))); // a conversa anda no tempo
-        $linhasComent[] = [(int) $post['id'], $pessoas[$i]['item'], $humanizar($texto, $ladoAutor), $chance(1) ? 'removido' : 'publicado', $data($t)];
+        $linhasComent[] = [(int) $post['id'], $pessoas[$i]['item'], $pessoas[$i]['uid'], $humanizar($texto, $ladoAutor), $chance(1) ? 'removido' : 'publicado', $data($t)];
         $comentPosts[$post['id']][] = [$i, $t];
     }
 }
-$lotes('INSERT INTO comentarios (post_id, item_id, texto, status, criado_em)', $linhasComent, 500);
+$lotes('INSERT INTO comentarios (post_id, item_id, usuario_id, texto, status, criado_em)', $linhasComent, 500);
 // respostas citando um comentário anterior do mesmo post
 $doPost = [];
 foreach ($pdo->query("SELECT c.id, c.post_id, c.item_id, UNIX_TIMESTAMP(c.criado_em) AS t FROM comentarios c WHERE c.item_id IN ($itensSeed) AND c.status = 'publicado'") as $c) {
@@ -459,12 +461,12 @@ foreach ($doPost as $postId => $lista) {
             $i = mt_rand(0, count($pessoas) - 1);
         } while ($i === $citado);
         $lado = $pessoas[$i]['lado'];
-        $linhasResp[] = [(int) $postId, $pessoas[$i]['item'], (int) $c['id'], $humanizar($um($respostas[$lado]), $lado), 'publicado',
+        $linhasResp[] = [(int) $postId, $pessoas[$i]['item'], $pessoas[$i]['uid'], (int) $c['id'], $humanizar($um($respostas[$lado]), $lado), 'publicado',
             $data($momento((int) $c['t'], min($agora, (int) $c['t'] + 2 * 86400)))];
     }
 }
 if ($linhasResp) {
-    $lotes('INSERT INTO comentarios (post_id, item_id, cita_id, texto, status, criado_em)', $linhasResp, 500);
+    $lotes('INSERT INTO comentarios (post_id, item_id, usuario_id, cita_id, texto, status, criado_em)', $linhasResp, 500);
 }
 $passo((count($linhasComent) + count($linhasResp)) . ' comentários (' . count($linhasResp) . ' respostas citando)');
 

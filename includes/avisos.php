@@ -35,12 +35,13 @@ function aviso_comentario_enviar(int $comentarioId): int
     $pdo = db();
     // o comentário, quem comentou e a publicação (com o dono)
     $st = $pdo->prepare("SELECT c.id, c.post_id, c.texto, c.video_id, c.cita_id,
-                                ia.usuario_id AS autor_uid, ia.nome AS autor_nome, ia.lado AS autor_lado,
-                                p.lado AS post_lado, p.texto AS post_texto, ip.usuario_id AS dono_uid, ip.numero AS dono_numero, ip.lado AS dono_lado
+                                c.usuario_id AS autor_uid, COALESCE(ia.nome, ua.nome) AS autor_nome, COALESCE(ia.lado, p.lado) AS autor_lado,
+                                p.lado AS post_lado, p.texto AS post_texto, p.usuario_id AS dono_uid, ip.numero AS dono_numero, p.lado AS dono_lado
                          FROM comentarios c
-                         JOIN itens ia ON ia.id = c.item_id
+                         JOIN usuarios ua ON ua.id = c.usuario_id
+                         LEFT JOIN itens ia ON ia.id = c.item_id
                          JOIN posts p ON p.id = c.post_id
-                         JOIN itens ip ON ip.id = p.item_id
+                         LEFT JOIN itens ip ON ip.id = p.item_id
                          WHERE c.id = ? AND c.status = 'publicado'");
     $st->execute([$comentarioId]);
     $c = $st->fetch();
@@ -51,7 +52,8 @@ function aviso_comentario_enviar(int $comentarioId): int
     // quem recebe: [usuario_id => lado do item dele]
     $para = [(int) $c['dono_uid'] => ['lado' => $c['dono_lado'], 'resposta' => false]];
     if ($c['cita_id']) {
-        $st = $pdo->prepare('SELECT i.usuario_id, i.lado FROM comentarios c JOIN itens i ON i.id = c.item_id WHERE c.id = ?');
+        $st = $pdo->prepare('SELECT c.usuario_id, COALESCE(i.lado, p.lado) AS lado FROM comentarios c JOIN posts p ON p.id = c.post_id
+                             LEFT JOIN itens i ON i.id = c.item_id WHERE c.id = ?');
         $st->execute([(int) $c['cita_id']]);
         if ($r = $st->fetch()) {
             $para[(int) $r['usuario_id']] ??= ['lado' => $r['lado'], 'resposta' => true];
@@ -91,7 +93,7 @@ function aviso_comentario_enviar(int $comentarioId): int
             push_avisar('comentario',
                 $info['resposta'] ? "↩️ $autorNome respondeu seu comentário" : "💬 $autorNome comentou na sua publicação",
                 '“' . mb_strimwidth($trecho, 0, 140, '…') . '”' . ($provocacao ? ' ' . $provocacao : ''),
-                url('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]), null, $uid);
+                $c['dono_numero'] ? url('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]) : url('pote', ['lado' => $c['dono_lado']]), null, $uid);
         } catch (Throwable $e) {
             // tabelas do push ainda não criadas (migration 025) ou serviço de push fora do ar
         }
@@ -99,7 +101,8 @@ function aviso_comentario_enviar(int $comentarioId): int
         if (!$temEmail || !$u['avisos_email'] || str_ends_with(strtolower($u['email']), '.local')) {
             continue; // e-mail: pediu para parar ou conta de teste (seed)
         }
-        $link = url_absoluta('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]);
+        // post de conta sem item não tem perfil: o link leva ao pote
+        $link = $c['dono_numero'] ? url_absoluta('perfil', ['lado' => $c['dono_lado'], 'id' => (int) $c['dono_numero']]) : url_absoluta('pote', ['lado' => $c['dono_lado']]);
         $linkParar = url_absoluta('avisos', ['u' => $uid]);
         [$assunto, $html, $texto] = email_comentario_recebido($S, nome_proprio($u['nome']), nome_proprio($c['autor_nome']), $A,
             $trecho, $info['resposta'], $link, $provocacao, $linkParar);

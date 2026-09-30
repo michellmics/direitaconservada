@@ -62,6 +62,11 @@
     const all = Object.keys(DC.sides).flatMap((s) => meusDe(s).map((o) => ({ ...o, side: s, nome: nomeProprio(o.nome) })));
     return all.sort((a, b) => (b.criado || 0) - (a.criado || 0))[0] || null;
   }
+  // conta logada sem item: escreve no mural com o nome da conta (id 0 = sem perfil e sem nível)
+  const semItem = (side = SIDE) => (DC.logado
+    ? { id: 0, side, nome: nomeProprio(DC.nome || 'Você'), foto: null, tipo: 'membro', selo: null, semItem: true }
+    : null);
+  const autorMural = () => me() || semItem();
 
   // ---------- utilidades ----------
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1458,7 +1463,7 @@
   const comentarioPorId = (id) => myComments.find((c) => c.id === id)
     || [...carregados.values()].flatMap((st) => st.lista).find((c) => c.id === id) || null;
   // só o dono apaga: comentário feito com um item da pessoa (o servidor confere de novo)
-  const souDono = (c) => !c.apagado && !!c.autor && idsMeus(c.autor.side).has(c.autor.id);
+  const souDono = (c) => !c.apagado && !!c.autor && (!!c.meu || idsMeus(c.autor.side).has(c.autor.id));
   const trechoDe = (c) => {
     const t = c.texto || (c.video ? '🎬 vídeo' : '');
     return t.length > 90 ? t.slice(0, 90).trimEnd() + '…' : t;
@@ -1471,7 +1476,7 @@
         <div class="comment-body"><p>Comentário apagado pelo autor.</p></div>
       </div>`;
     }
-    const a = c.autor;
+    const a = c.autor.id ? c.autor : { ...c.autor, tipo: 'membro' }; // conta sem item: iniciais em cinza
     const sd = DC.sides[a.side];
     const visitor = a.side !== SIDE;
     const link = c.link || profileUrl(a.side, a.id);
@@ -1562,11 +1567,9 @@
   }
 
   function commentFormHtml(postId) {
-    const eu = me();
+    const eu = autorMural();
     if (!eu) {
-      return `<p class="comment-cta">Para comentar, garanta sua ${S.item} ${S.emoji}
-        <button class="btn btn-gold btn-sm" type="button" data-open-buy>Garantir</button>
-        ou uma ${OTHER.item} ${OTHER.emoji} <a href="${esc(poteUrl(OTHER.slug))}">no outro pote</a>.${DC.logado ? '' : ` Já tem? <a href="${esc(DC.loginUrl)}">Entre na sua conta</a>.`}</p>`;
+      return `<p class="comment-cta">Para comentar, <a class="btn btn-gold btn-sm" href="${esc(DC.loginUrl)}">cadastre-se</a> ou entre na sua conta. É grátis.</p>`;
     }
     const sd = DC.sides[eu.side];
     return `<form class="comment-form" data-post="${postId}">
@@ -1597,12 +1600,17 @@
   }
 
   function postHtml(p) {
-    const o = byId(p.oliveId);
+    const o = p.oliveId ? byId(p.oliveId) : null;
     const open = openComments.has(p.id);
+    // conta sem item: nome da conta, iniciais em cinza, sem perfil nem nível
+    const cabeca = o
+      ? `${avatarWithSelo(o, 'post-avatar' + (anelDe(o) ? ' tempo-' + anelDe(o) : ''))}
+        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)}</small></div>`
+      : `${avatarHtml({ nome: nomeProprio(p.autor?.nome || '?'), side: SIDE, tipo: 'membro' }, 'post-avatar')}
+        <div><b>${esc(nomeProprio(p.autor?.nome || ''))}</b><span class="membro-tag">sem ${esc(S.item)}</span></div>`;
     return `<article class="post${p.isNew ? ' is-new' : ''}${p.video ? ' has-video' : ''}" data-post-id="${p.id}">
       <div class="post-head">
-        ${avatarWithSelo(o, 'post-avatar' + (anelDe(o) ? ' tempo-' + anelDe(o) : ''))}
-        <div><a class="name-link" href="${profileUrl(SIDE, o.id)}">${esc(o.nome)}${nivelTag(SIDE, o.id)}</a>${provocadorTag(o.id)}<small>${esc(o.cidade)}/${esc(o.uf)}</small></div>
+        ${cabeca}
       </div>
       ${p.text ? `<p>${esc(p.text)}</p>` : ''}
       ${p.video ? videoBoxHtml('post-video', p.video) : ''}
@@ -1662,7 +1670,7 @@
     const form = e.target.closest('.comment-form');
     if (!form) return;
     e.preventDefault();
-    const eu = me();
+    const eu = autorMural();
     const { video, text } = extractVideo(form.elements.texto.value); // link de vídeo vira resposta em vídeo
     if (!eu || (!text && !video)) return;
     if (text.length > COMENTARIO_MAX) { toast(`Comentário: até ${COMENTARIO_MAX} caracteres (sem contar o link do vídeo)`); return; }
@@ -1803,13 +1811,14 @@
     }
   });
 
-  // composer: só quem tem item deste pote publica (comentar vale para os dois lados)
+  // composer: qualquer conta logada publica (com o item deste pote, se tiver; senão com o nome da conta)
   const composer = $('#composer');
   const composerText = $('#composer-text');
+  const autorComposer = () => mine[mine.length - 1] || semItem();
 
   function updateComposer() {
     if (!composer) return; // página sem mural para publicar (ex.: perfil)
-    const eu = mine[mine.length - 1];
+    const eu = autorComposer();
     if (eu) {
       $('#composer-avatar').outerHTML = avatarHtml(eu, 'composer-avatar').replace(/^<(\w+) /, '<$1 id="composer-avatar" ');
       composerText.placeholder = `O que você quer compartilhar, ${eu.nome.split(' ')[0]}?`;
@@ -1835,12 +1844,12 @@
   }
   composerText?.addEventListener('input', updateComposerPreview);
   composerText?.addEventListener('focus', () => {
-    if (!mine.length) { toast(`Só ${S.members} podem publicar aqui. Garanta sua ${S.item}!`); }
+    if (!DC.logado) { toast('Cadastre-se ou entre na sua conta para publicar. É grátis!'); }
   });
   composer?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const eu = mine[mine.length - 1];
-    if (!eu) { goStep(1); openModal('#buy-modal'); updateTotal(); return; }
+    const eu = autorComposer();
+    if (!eu) { location.href = DC.loginUrl; return; }
     const { video, text } = extractVideo(composerText.value);
     if (!text && !video) return;
     if (text.length > TEXT_MAX) { toast(`Máximo de ${TEXT_MAX} caracteres (sem contar o link)`); return; }
@@ -1857,8 +1866,8 @@
     }
     const nivelAntes = meuNivel(SIDE);
     myPosts.unshift({ ...r.post, isNew: true });
-    const autor = byId(r.post.oliveId) || eu;
-    if (video) refreshOlive(autor); // aparece o selo de play no item
+    const autor = r.post.oliveId ? byId(r.post.oliveId) || eu : null;
+    if (video && autor) refreshOlive(autor); // aparece o selo de play no item
     composerText.value = '';
     updateComposerPreview();
     $$('.tab').forEach((x) => x.classList.toggle('active', x.dataset.sort === 'recentes'));

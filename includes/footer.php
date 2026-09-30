@@ -41,6 +41,7 @@
         'capacity' => JAR_CAPACITY,
         'logado'   => $U !== null,
         'email'    => $U['email'] ?? null,
+        'nome'     => $U ? nome_proprio($U['nome']) : null, // quem não tem item publica e comenta com o nome da conta
         'meus'     => $conta['meus'],
         'pedidos'  => $conta['pedidos'],
         'curtidas' => $conta['curtidas'],

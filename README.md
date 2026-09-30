@@ -5,7 +5,9 @@ Dois potes num site só. Na entrada a pessoa escolhe o lado:
 - **Direita Conservada**: pote de azeitonas, certificado "Direita conservada desde <data>".
 - **Pimenta da Resistência**: pote de pimentas (tema vermelho), certificado "Na resistência desde <data>".
 
-Cada pote tem seu mural, ranking e certificado. Quem tem item em qualquer um dos potes pode **comentar nos posts dos dois lados**.
+Cada pote tem seu mural, ranking e certificado. **Qualquer conta (cadastro grátis) publica e comenta** nos murais dos dois lados
+(migration 027: `posts`/`comentarios` guardam `usuario_id`; `item_id` NULL = conta sem item, aparece com o nome da conta, sem perfil
+nem nível). Desafiar e ser desafiado no Tretódromo exige azeitona ou pimenta ativa; votar só exige login.
 
 **Estado atual:** tudo no banco (MySQL). Compras por Pix conferidas à mão no painel; itens, posts, comentários, curtidas e
 pedidos são da conta de quem está logado (nada de dados só no navegador).

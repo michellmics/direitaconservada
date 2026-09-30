@@ -4,6 +4,8 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/frases.php'; // frases engraçadas do mural, compra e rodapé
 $O = side($S['other']);
 $U = current_user();
+// token do "Sair" gerado antes de qualquer HTML: no meio da página o setcookie não vai e o Sair falha em silêncio
+$csrfSair = $U ? csrf_publico() : null;
 $ehPote = basename($_SERVER['SCRIPT_NAME']) === 'pote.php';
 // página atual (rota + ?c=… cifrado; pote = /direita ou /esquerda): para onde voltar depois de entrar/sair
 $paginaAtual = $ehPote ? $S['slug'] : rota_atual() . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . $_GET[URL_PARAM] : '');
@@ -72,7 +74,7 @@ $pageDesc ??= $S['og'];
           <p><b><?= e(nome_proprio($U['nome'])) ?></b><small><?= e($U['email']) ?></small></p>
           <a class="btn btn-gold btn-sm btn-block" id="my-profile-menu" href="<?= e(url('perfil', ['lado' => $S['slug'], 'meu' => 1])) ?>">Ver meu perfil</a>
           <form method="post" action="sair">
-            <input type="hidden" name="csrf" value="<?= e(csrf_publico()) ?>">
+            <input type="hidden" name="csrf" value="<?= e($csrfSair) ?>">
             <input type="hidden" name="r" value="<?= e(destino_seguro($paginaAtual)) ?>">
             <button class="btn btn-ghost btn-sm btn-block">Sair</button>
           </form>

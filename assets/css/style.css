@@ -322,6 +322,9 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .avatar-esquerda-biquinho { background: radial-gradient(circle at 35% 35%, #ffc063, #c2410c); }
 .avatar-esquerda-malagueta { background: radial-gradient(circle at 35% 35%, #e0405a, #5a0610); color: #fff; }
 .avatar-esquerda-grande { background: radial-gradient(circle at 35% 35%, #ff8a70, #a3120a); color: #fff; }
+/* conta sem azeitona/pimenta: publica e comenta com as iniciais em cinza */
+.avatar-direita-membro, .avatar-esquerda-membro { background: radial-gradient(circle at 35% 35%, #9a948b, #4a4640); color: #fff; }
+.membro-tag { margin-left: 6px; font-size: .72rem; font-weight: 600; opacity: .7; }
 
 /* ---------- comentários (os dois lados) ---------- */
 .post-actions { flex-wrap: wrap; }

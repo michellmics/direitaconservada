@@ -42,6 +42,9 @@ function presente_resgatar(string $token, int $usuarioId): array
         // no MySQL o SET vai da esquerda para a direita: presente_de guarda quem deu ANTES de trocar o dono
         $pdo->prepare('UPDATE itens SET presente_de = usuario_id, usuario_id = ?, presente_token = NULL, presente_resgatado_em = NOW()
                        WHERE id = ?')->execute([$usuarioId, $item['id']]);
+        // a frase do presente no mural passa a ser de quem ganhou
+        $pdo->prepare('UPDATE posts SET usuario_id = ? WHERE item_id = ?')->execute([$usuarioId, $item['id']]);
+        $pdo->prepare('UPDATE comentarios SET usuario_id = ? WHERE item_id = ?')->execute([$usuarioId, $item['id']]);
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();
