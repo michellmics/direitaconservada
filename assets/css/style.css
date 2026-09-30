@@ -1780,3 +1780,172 @@ html.pwa-travado { overflow: hidden; }
 .erro-acoes .btn-gold { flex-basis: 100%; max-width: 320px; margin: 0 auto 4px; justify-content: center; }
 .erro-page .btn-ghost { color: #f4ecd8; }
 @media (prefers-reduced-motion: reduce) { .erro-pote span { animation: none; } }
+
+/* ---------- Tretódromo: arena de duelos (tretodromo.php, duelo.php, partials/arena.php) ---------- */
+.arena-page { --a-linha: #2a221b; --a-sup: #1a140f; --a-suave: #b9ad9a; --a-ouro: #e7c54d;
+  --d-fundo: #1f2811; --d-borda: #3f4d2a; --d-cor: #e7c54d; --d-forte: #c9a227;
+  --e-fundo: #27110e; --e-borda: #5c2a24; --e-cor: #ff7a5c; --e-forte: #e0563f; }
+.c-direita { color: var(--d-cor); } .c-esquerda { color: var(--e-cor); }
+.bg-direita { background: var(--d-forte); } .bg-esquerda { background: var(--e-forte); }
+.arena-topo { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--a-linha); background: #0d0a07; }
+.arena-marca { display: flex; align-items: center; gap: 10px; color: var(--a-ouro); text-decoration: none; font: 800 1.35rem var(--serif); }
+.arena-voltar { color: var(--a-suave); font-size: .9rem; text-decoration: none; }
+.arena-nav { margin-left: auto; display: flex; gap: 14px; }
+.arena-nav a, .arena-conta { color: var(--a-suave); text-decoration: none; font-size: .92rem; font-weight: 600; }
+.arena-nav a:hover, .arena-conta:hover, .arena-voltar:hover { color: #f4ecd8; }
+.arena-conta { padding: .45em 1em; border: 1px solid var(--a-linha); border-radius: 99px; color: #f4ecd8; }
+.arena-selo { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; margin-left: 4px; border-radius: 99px; background: var(--e-forte); color: #fff; font-size: .72rem; }
+.arena { max-width: 1180px; margin: 0 auto; padding: 36px 16px 48px; }
+.arena h2 { font: 800 1.4rem var(--serif); margin: 0 0 14px; display: flex; align-items: center; gap: 10px; }
+.arena-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 32px; }
+.arena-hero h1 { margin: 6px 0 8px; font: 900 clamp(2.6rem, 8vw, 4rem)/1 var(--serif); letter-spacing: -.02em; }
+.arena-hero p { margin: 0; color: var(--a-suave); font-size: 1.1rem; }
+.arena-sobre, .duelo-sobre { display: inline-flex; align-items: center; gap: 8px; color: var(--a-ouro); font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.arena-aviso { padding: 14px 18px; border-radius: 14px; background: #1f190c; border: 1px solid #6b5720; color: #f4ecd8; }
+.arena-aviso a, .arena-sub a { color: var(--a-ouro); }
+.arena-vazio { color: var(--a-suave); font-size: .95rem; }
+.arena-meus { margin-bottom: 32px; }
+.arena-meus ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.arena-meus a { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 16px; background: var(--a-sup); border: 1px solid var(--a-linha); color: #f4ecd8; text-decoration: none; }
+.arena-meus li.is-urgente a { border-color: var(--a-ouro); box-shadow: 0 0 0 1px var(--a-ouro); }
+.arena-meus span { color: var(--a-suave); font-size: .88rem; }
+.arena-meus li.is-urgente span { color: var(--a-ouro); font-weight: 600; }
+.arena-meus small { display: flex; align-items: center; gap: 4px; color: var(--a-suave); font-size: .8rem; }
+.arena-grade { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+.arena-abas { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.arena-abas a { padding: .45em 1em; border-radius: 99px; border: 1px solid var(--a-linha); color: var(--a-suave); font-size: .9rem; font-weight: 600; text-decoration: none; }
+.arena-abas a.is-on { background: var(--a-ouro); border-color: var(--a-ouro); color: #231a00; }
+.arena-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.arena-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 18px; background: var(--a-sup); border: 1px solid var(--a-linha); color: #f4ecd8; text-decoration: none; transition: border-color .15s, transform .15s; }
+.arena-card:hover { border-color: #6b5720; transform: translateY(-2px); }
+.arena-card-selo { align-self: flex-start; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: .3em .7em; border-radius: 99px; background: #2a221b; color: var(--a-suave); }
+.arena-card-selo.is-vivo { background: #3a1512; color: #ff9b8a; }
+.arena-card-selo.is-espera { background: #3a2f12; color: #f0d58a; }
+.duelo-topo .arena-card-selo { align-self: center; }
+.arena-card-tema { font: 800 1.2rem/1.25 var(--serif); }
+.arena-card-nomes { display: flex; justify-content: space-between; gap: 8px; font-size: .88rem; font-weight: 700; }
+.arena-barra { display: flex; gap: 3px; height: 8px; }
+.arena-barra i { display: block; border-radius: 2px; }
+.arena-barra i:first-child { border-radius: 99px 2px 2px 99px; }
+.arena-barra i:last-child { flex: 1; border-radius: 2px 99px 99px 2px; }
+.arena-barra.is-grande { height: 16px; }
+.arena-lateral { padding: 20px; border-radius: 20px; background: var(--a-sup); border: 1px solid var(--a-linha); }
+.arena-lateral h2 { font-size: 1.2rem; }
+.arena-lateral h2 .arena-ic { color: var(--a-ouro); }
+.arena-ranking { list-style: none; margin: 0 0 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.arena-ranking li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; }
+.arena-ranking li:first-child { background: #1f190c; }
+.arena-ranking b { width: 18px; font: 800 1.1rem var(--serif); color: var(--a-suave); }
+.arena-ranking li:first-child b { color: var(--a-ouro); }
+.arena-ranking i { width: 10px; height: 10px; border-radius: 50%; }
+.arena-ranking a { flex: 1; color: #f4ecd8; font-weight: 600; text-decoration: none; }
+.arena-ranking span { color: var(--a-suave); font-size: .85rem; }
+.arena-placar-potes { padding: 14px; border-radius: 14px; background: #120e0a; }
+.arena-placar-potes small { color: var(--a-suave); font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.arena-placar-potes div { display: flex; justify-content: space-between; align-items: baseline; font: 800 1.8rem var(--serif); }
+.arena-placar-potes div span { color: var(--a-suave); font-size: 1rem; }
+.arena-placar-potes .arena-placar-rotulos { font: 500 .8rem var(--sans); color: var(--a-suave); }
+.arena-desafiar { max-width: 720px; margin: 48px auto 0; padding: 28px; border-radius: 24px; background: var(--a-sup); border: 1px solid #6b5720; scroll-margin-top: 20px; }
+.arena-sub { color: var(--a-suave); margin: -6px 0 18px; }
+.arena-form { display: flex; flex-direction: column; gap: 18px; }
+.arena-form fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.arena-form legend, .arena-campo { font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--a-ouro); margin-bottom: 8px; }
+.arena-form legend small { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--a-suave); }
+.arena-campo { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.arena-form input:not([type="radio"]), .arena-form textarea, .duelo-responder textarea {
+  width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--a-linha); background: #120e0a;
+  color: #f4ecd8; font: 500 1rem/1.5 var(--sans); letter-spacing: 0; text-transform: none; resize: vertical; }
+.arena-form input:focus, .arena-form textarea:focus, .duelo-responder textarea:focus { outline: none; border-color: var(--a-ouro); }
+.arena-escolha { display: flex; flex-wrap: wrap; gap: 8px; }
+.arena-escolha input { position: absolute; opacity: 0; }
+.arena-escolha span { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--a-linha); cursor: pointer; font-weight: 600; text-transform: none; letter-spacing: 0; color: #f4ecd8; }
+.arena-escolha small { color: var(--a-suave); font-weight: 500; }
+.arena-escolha input:checked + span { border-color: var(--a-ouro); box-shadow: 0 0 0 1px var(--a-ouro); }
+.arena-escolha input:focus-visible + span { outline: 2px solid var(--a-ouro); outline-offset: 2px; }
+.arena-oponente { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--a-ouro); }
+.arena-oponente small { color: var(--a-suave); }
+.arena-oponente[hidden], .arena-resultados[hidden] { display: none; }
+.arena-resultados { list-style: none; margin: 0; padding: 6px; border-radius: 14px; background: #120e0a; border: 1px solid var(--a-linha); }
+.arena-resultados button { width: 100%; text-align: left; padding: 10px 12px; border: 0; border-radius: 10px; background: none; color: #f4ecd8; font: 500 .95rem var(--sans); cursor: pointer; }
+.arena-resultados button:hover, .arena-resultados button:focus-visible { background: var(--a-sup); }
+.arena-resultados small { color: var(--a-suave); }
+.arena-resultados .arena-vazio { padding: 10px 12px; }
+.arena-contador { align-self: flex-end; color: var(--a-suave); font-size: .78rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.arena-regras { margin: 0; color: var(--a-suave); font-size: .88rem; }
+
+.duelo-topo { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 28px; }
+.duelo-topo h1 { margin: 0; max-width: 900px; font: 900 clamp(1.9rem, 5vw, 3.2rem)/1.08 var(--serif); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.duelo-topo p { margin: 0; color: var(--a-suave); }
+.duelo-topo p b { color: #f4ecd8; }
+.duelo-vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 18px; align-items: center; }
+.duelista { position: relative; display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 20px; border: 2px solid; color: #f4ecd8; text-decoration: none; }
+.duelista-b { flex-direction: row-reverse; text-align: right; }
+.duelista.tema-direita { background: var(--d-fundo); border-color: var(--d-forte); }
+.duelista.tema-esquerda { background: var(--e-fundo); border-color: var(--e-forte); }
+.duelista.is-vencedor { box-shadow: 0 0 0 4px #120e0a, 0 0 0 6px var(--a-ouro), 0 18px 50px -12px var(--a-ouro); }
+.duelista-avatar { flex: none; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.2); border: 3px solid currentColor; }
+.tema-direita .duelista-avatar { color: var(--d-cor); } .tema-esquerda .duelista-avatar { color: var(--e-cor); }
+.duelista-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.duelista-info small { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.tema-direita .duelista-info small { color: #c9d27a; } .tema-esquerda .duelista-info small { color: #ff9b8a; }
+.duelista-info b { font: 800 1.6rem/1.15 var(--serif); overflow-wrap: anywhere; }
+.duelista-info span { font-size: .85rem; color: var(--a-suave); }
+.duelista-coroa { position: absolute; top: -16px; right: 18px; padding: 6px; border-radius: 50%; background: var(--a-ouro); color: #231a00; display: grid; }
+.duelista-b .duelista-coroa { right: auto; left: 18px; }
+.duelo-x { width: 84px; height: 84px; border-radius: 50%; display: grid; place-items: center; background: var(--a-sup); border: 2px solid var(--a-ouro);
+  box-shadow: 0 0 0 6px #120e0a, 0 0 0 8px var(--a-linha); font: italic 900 2rem var(--serif); color: var(--a-ouro); }
+.duelo-placar { margin-top: 28px; display: flex; flex-direction: column; gap: 8px; }
+.duelo-placar-nums { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.duelo-placar-nums b { font: 800 1.8rem var(--serif); }
+.duelo-placar-nums small, .duelo-placar-rotulo { color: var(--a-suave); font-size: .88rem; }
+.duelo-resultado { margin-top: 28px; padding: 22px; border-radius: 20px; text-align: center; background: #1f190c; border: 1px solid #6b5720; }
+.duelo-resultado h2 { justify-content: center; color: var(--a-ouro); font-size: 1.7rem; margin-bottom: 6px; }
+.duelo-resultado p { margin: 0; color: var(--a-suave); }
+.duelo-resultado.is-apagado { background: var(--a-sup); border-color: var(--a-linha); }
+.duelo-resultado.is-apagado h2 { color: #f4ecd8; }
+.duelo-resultado a { color: var(--a-ouro); }
+.duelo-rodadas { margin-top: 36px; display: flex; flex-direction: column; gap: 26px; }
+.duelo-rodada h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font: 800 1.25rem var(--serif); }
+.duelo-rodada h3::after { content: ""; flex: 1; height: 1px; background: var(--a-linha); }
+.duelo-rodada h3 small { font: 500 .9rem var(--sans); color: #9d9282; }
+.duelo-args { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.duelo-arg { margin: 0; padding: 18px 20px; border-radius: 6px 20px 20px 20px; border: 1px solid; display: flex; flex-direction: column; gap: 10px; }
+.duelo-args > :nth-child(2) { border-radius: 20px 6px 20px 20px; }
+.duelo-arg.tema-direita { background: var(--d-fundo); border-color: var(--d-borda); }
+.duelo-arg.tema-esquerda { background: var(--e-fundo); border-color: var(--e-borda); }
+.duelo-arg p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.duelo-arg small { color: var(--a-suave); font-size: .8rem; }
+.duelo-espera { flex-direction: row; align-items: center; gap: 10px; border: 2px dashed var(--a-linha); color: var(--a-suave); }
+.duelo-espera b { color: #f4ecd8; }
+.duelo-vazio { border: 1px dashed var(--a-linha); background: transparent; min-height: 60px; }
+.duelo-responder { border-width: 2px; }
+.duelo-responder.tema-direita { border-color: var(--d-cor); } .duelo-responder.tema-esquerda { border-color: var(--e-cor); }
+.duelo-responder label { font-size: .92rem; }
+.duelo-responder-pe { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.duelo-painel { margin-top: 36px; padding: 26px; border-radius: 22px; background: var(--a-sup); border: 1px solid var(--a-linha); text-align: center; }
+.duelo-painel h2 { justify-content: center; font-size: 1.6rem; margin-bottom: 6px; }
+.duelo-painel > p { margin: 0 0 16px; color: var(--a-suave); }
+.duelo-botoes { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.duelo-votar { display: inline-flex; align-items: center; gap: 8px; min-height: 50px; padding: .8em 1.6em; border-radius: 99px; border: 2px solid; font-weight: 700; background: transparent; color: #f4ecd8; cursor: pointer; }
+.duelo-votar.tema-direita { border-color: var(--d-forte); } .duelo-votar.tema-esquerda { border-color: var(--e-forte); }
+.duelo-votar.tema-direita.is-meu { background: var(--d-cor); color: #231a00; }
+.duelo-votar.tema-esquerda.is-meu { background: var(--e-cor); color: #2a0a04; }
+.duelo-compartilhar { margin-top: 28px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.perfil-desafiar { margin-top: 14px; }
+
+@media (max-width: 900px) {
+  .arena-grade { grid-template-columns: 1fr; }
+  .duelo-vs { grid-template-columns: 1fr; }
+  .duelo-x { justify-self: center; width: 64px; height: 64px; font-size: 1.5rem; margin: -6px 0; }
+  .duelista-b { flex-direction: row; text-align: left; }
+  .duelista-b .duelista-coroa { left: auto; right: 18px; }
+}
+@media (max-width: 640px) {
+  .arena-topo { padding: 12px 16px; gap: 10px; }
+  .arena-nav { display: none; }
+  .arena-conta { margin-left: auto; }
+  .arena-lista, .duelo-args { grid-template-columns: 1fr; }
+  .arena-desafiar { padding: 20px 16px; }
+  .duelista-info b { font-size: 1.3rem; }
+  .duelista-avatar { width: 60px; height: 60px; }
+}

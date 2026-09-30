@@ -55,6 +55,8 @@ $rotinas = [
     'vencimentos' => fn() => vencimentos_avisar(),
     // notificações do app: virada no placar avisa o pote que ficou para trás (includes/push.php, migration 025)
     'push_placar' => function () { require_once dirname(__DIR__) . '/includes/push.php'; return push_placar(); },
+    // Tretódromo: desafio não aceito expira, quem não respondeu perde por W.O., votação encerrada é apurada
+    'duelos'      => function () { require_once dirname(__DIR__) . '/includes/duelos.php'; return duelos_atualizar(); },
 ];
 $saida = [];
 foreach ($rotinas as $nome => $rotina) {

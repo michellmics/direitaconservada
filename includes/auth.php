@@ -183,7 +183,8 @@ function usar_codigo(string $email, string $codigo): array
 function destino_seguro(?string $r): string
 {
     $r = (string) $r;
-    return preg_match('/^(\.\/|pote|perfil|presente|direita|esquerda)(\?c=[A-Za-z0-9_-]+)?(#[\w-]*)?$/', $r) ? $r : './';
+    return preg_match('/^(\.\/|pote|perfil|presente|direita|esquerda|tretodromo)(\?c=[A-Za-z0-9_-]+)?(#[\w-]*)?$/', $r)
+        || preg_match('/^duelo\?n=\d+(#[\w-]*)?$/', $r) ? $r : './';
 }
 
 // ---------- CSRF (cookie + campo escondido) ----------

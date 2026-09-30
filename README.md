@@ -112,6 +112,15 @@ Os votos vão para o banco (`enquete_votos`), um por navegador, até existir log
 - Consultar em **`/cozinha/visitas`**: online agora (ao vivo), hoje × ontem, período × período anterior, tendência
   semanal, gráficos por dia, mês (com projeção) e hora, mapa de calor dia × hora, páginas, origens e aparelhos.
 
+## Tretódromo: duelos 1×1 (migration 026)
+
+- **`/tretodromo`** (arena: ao vivo, aguardando, encerrados, gladiadores do mês e "Lançar desafio") e **`/duelo?n=ID`**
+  (o duelo, com endereço fixo que vai para o Google). Lógica em `includes/duelos.php`, API em `api/duelo.php`.
+- Grátis: para desafiar ou aceitar basta ter uma azeitona ou pimenta ativa; sempre contra alguém do outro pote.
+  Aceite em 24 h → 3 rodadas (24 h por resposta; sem resposta = W.O.) → 24 h de votação (qualquer conta logada,
+  menos os duelistas). Prazos vencidos: `duelos_atualizar()` ao abrir as páginas e na cron.
+- Avisos por push (e e-mail no desafio recebido). Card de vitória em PNG gerado no navegador (`assets/js/duelo.js`).
+
 ## Alertas para o administrador (migration 020)
 
 - Destinatários em `ENV_EMAIL_ALERTAS` (separados por vírgula). `includes/alertas.php`.

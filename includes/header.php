@@ -43,6 +43,7 @@ $pageDesc ??= $S['og'];
         <a href="<?= $home ?>#pote">O Pote</a>
         <a href="<?= $home ?>#mural">Mural</a>
         <a href="<?= $home ?>#como">Como funciona</a>
+        <a href="tretodromo">⚔️ Tretódromo</a>
       </div>
     </details>
     <?php // o nome leva ao início do pote atual; trocar de pote fica no rodapé ("Trocar de pote") ?>
@@ -54,6 +55,7 @@ $pageDesc ??= $S['og'];
       <a href="<?= $home ?>#pote">O Pote</a>
       <a href="<?= $home ?>#mural">Mural</a>
       <a href="<?= $home ?>#como">Como funciona</a>
+      <a href="tretodromo">⚔️ Tretódromo</a>
     </nav>
     <a class="side-switch" href="<?= e(url('pote', ['lado' => $O['slug']])) ?>" style="<?= theme_vars($O) ?>" title="Ir para <?= e($O['name']) ?>">
       <?= item_svg($O, $O['logo'], 'side-switch-icon') ?><span>Espiar o outro pote</span>

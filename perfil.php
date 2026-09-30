@@ -81,6 +81,11 @@ require __DIR__ . '/includes/header.php';
         <div class="olive-tip" id="olive-tip" hidden></div>
         <p class="profile-jar-caption" id="profile-jar-caption"></p>
       </div>
+      <?php // Tretódromo: desafiar a pessoa do perfil (quem é do outro pote e não é a própria pessoa)
+      $meusNumeros = array_column(banco_meus_itens((int) (current_user()['id'] ?? 0))[$S['slug']] ?? [], 'id');
+      if ($person && !in_array($id, $meusNumeros, true)): ?>
+        <a class="btn btn-gold btn-block perfil-desafiar" href="<?= e(url('tretodromo', ['contra_lado' => $S['slug'], 'contra_num' => $id], 'desafiar')) ?>">⚔️ Desafiar para um duelo</a>
+      <?php endif; ?>
     </aside>
   </section>
 
