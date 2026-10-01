@@ -25,6 +25,13 @@ function e(?string $s): string
     return htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 }
 
+// Dados do responsável nas páginas de Privacidade e Termos (.env); vazio = aviso amarelo "[preencher: …]"
+function dono_info(string $chave, string $rotulo): string
+{
+    $valor = trim((string) env($chave, ''));
+    return $valor !== '' ? e($valor) : '<span class="preencher">[preencher: ' . e($rotulo) . ']</span>';
+}
+
 // Nome próprio: "JOÃO DA SILVA" / "joão da silva" → "João da Silva" (igual a nomeProprio() no JS).
 // Use também ao salvar no banco.
 function nome_proprio(?string $s): string

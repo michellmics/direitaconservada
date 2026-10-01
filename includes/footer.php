@@ -4,7 +4,7 @@
     <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
     <button type="button" class="push-botao" data-push hidden>🔔 Receber avisos</button>
     <p><b><?= e($S['name']) ?></b> · <a href="./">Trocar de pote</a> · © <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
-  </footer>
+  <?php require __DIR__ . '/../partials/legal.php'; ?>
 
   <div class="toast" id="toast" hidden></div>
   <script src="<?= asset('assets/js/visitas.js') ?>" data-lado="<?= e($S['slug']) ?>" defer></script>

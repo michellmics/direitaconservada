@@ -90,7 +90,7 @@ $total = array_sum($count);
   <footer class="footer">
     <button type="button" class="pwa-instalar" data-instalar-app hidden>📲 Instalar o app</button>
     <p><a href="tretodromo">⚔️ Tretódromo</a> · © <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
-  </footer>
+  <?php require __DIR__ . '/partials/legal.php'; ?>
   <script>
     // Feedback ao escolher o pote: o card escolhido "mergulha", o outro some e o botão mostra "Entrando…"
     (() => {

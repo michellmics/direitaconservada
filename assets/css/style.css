@@ -1982,3 +1982,33 @@ html.pwa-travado { overflow: hidden; }
   .duelista-info b { font-size: 1.3rem; }
   .duelista-avatar { width: 60px; height: 60px; }
 }
+
+/* ---------- rodapé legal e aviso de cookies (partials/legal.php) ---------- */
+.rodape-legal { margin-top: 10px; }
+.rodape-legal a, .rodape-link { color: inherit; }
+.rodape-link { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; }
+.cookie-aviso {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+  background: var(--surface); color: var(--text); border-top: 3px solid var(--gold);
+  box-shadow: 0 -10px 30px rgba(0,0,0,.45); padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.cookie-dentro { max-width: 1160px; margin: 0 auto; padding: 16px; display: flex; gap: 14px 24px; align-items: center; flex-wrap: wrap; text-align: left; }
+.cookie-texto { flex: 1 1 420px; min-width: 0; }
+.cookie-texto h2 { font-size: 1.1rem; margin: 0 0 4px; }
+.cookie-texto p { margin: 0; font-size: .88rem; color: var(--muted); max-width: 90ch; }
+.cookie-texto a { color: var(--gold-2); }
+.cookie-opcoes { display: grid; gap: 6px; margin-top: 10px; font-size: .88rem; }
+.cookie-opcoes label { display: flex; gap: 8px; align-items: flex-start; }
+.cookie-opcoes input { margin-top: 3px; accent-color: var(--gold); }
+.cookie-botoes { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Privacidade e Termos de uso ---------- */
+.legal { max-width: 860px; margin: 0 auto; padding: 40px 16px 60px; }
+.legal h1 { font-size: 2.2rem; }
+.legal h2 { font-size: 1.3rem; margin-top: 1.6em; }
+.legal p, .legal li { color: var(--muted); }
+.legal b { color: var(--text); }
+.legal a { color: var(--gold-2); }
+.legal-data { font-size: .85rem; }
+.legal-aviso { background: color-mix(in srgb, #f5c400 15%, transparent); border: 1px solid #f5c400; border-radius: 12px; padding: 12px 14px; }
+.preencher { background: #f5c400; color: #231a00; padding: 0 4px; border-radius: 4px; font-weight: 600; }

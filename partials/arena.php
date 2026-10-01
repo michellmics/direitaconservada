@@ -57,7 +57,7 @@ function arena_fim(): void
     ?>
   <footer class="footer">
     <p><a href="./">Pote Político</a> · <a href="tretodromo">Tretódromo</a> · © <?= date('Y') ?> <?= e(SITE_NAME) ?></p>
-  </footer>
+  <?php require __DIR__ . '/../partials/legal.php'; ?>
   <div class="toast" id="toast" hidden></div>
   <script src="<?= asset('assets/js/duelo.js') ?>" defer></script>
   <script src="<?= asset('assets/js/visitas.js') ?>" defer></script>

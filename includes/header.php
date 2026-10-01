@@ -12,7 +12,8 @@ $ehPote = basename($_SERVER['SCRIPT_NAME']) === 'pote.php';
 $paginaAtual = $ehPote ? $S['slug'] : rota_atual() . (isset($_GET[URL_PARAM]) ? '?' . URL_PARAM . '=' . $_GET[URL_PARAM] : '');
 $comCompra = in_array(basename($_SERVER['SCRIPT_NAME']), ['pote.php', 'perfil.php'], true); // páginas com o modal de compra
 // SEO: só os potes vão para o Google (endereço oficial + trilha "Início › pote"); entrar, perfil, presente e avisos: noindex
-$canonica = $ehPote ? url_base() . $S['slug'] : null;
+// (Privacidade e Termos definem a própria $canonica: também vão para o Google)
+$canonica = $ehPote ? url_base() . $S['slug'] : ($canonica ?? null);
 $pageDesc ??= $S['og'];
 ?>
 <!doctype html>
@@ -24,7 +25,7 @@ $pageDesc ??= $S['og'];
   <title><?= e($pageTitle) ?></title>
   <meta name="description" content="<?= e($pageDesc) ?>">
   <meta name="google-adsense-account" content="ca-pub-1658139075721224">
-  <?= seo_tags($canonica, $canonica ? ['@type' => 'BreadcrumbList', 'itemListElement' => [
+  <?= seo_tags($canonica, $ehPote ? ['@type' => 'BreadcrumbList', 'itemListElement' => [
     ['@type' => 'ListItem', 'position' => 1, 'name' => 'Pote Político', 'item' => url_base()],
     ['@type' => 'ListItem', 'position' => 2, 'name' => $S['name'], 'item' => $canonica],
   ]] : []) ?>
