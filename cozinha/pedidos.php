@@ -1,6 +1,6 @@
 <?php
-// Painel: pagamentos Pix para conferir no extrato. Aprovar = entra no pote; negar = pedido cancelado.
-// Confira pelo nome do titular + valor + horário. A página se atualiza sozinha a cada minuto.
+// Painel: histórico dos pedidos. O site é grátis (migration 028): os pedidos novos já nascem aprovados.
+// Aprovar/negar ficou só para algum pedido antigo, do tempo do Pix, que ainda esteja pendente.
 require dirname(__DIR__) . '/includes/config.php';
 require dirname(__DIR__) . '/includes/admin_auth.php';
 require dirname(__DIR__) . '/includes/pedidos.php';
@@ -126,7 +126,7 @@ function cartao_pedido(array $p, bool $acoes): string
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta http-equiv="refresh" content="60">
-  <title><?= $g['pendentes'] ? '(' . count($g['pendentes']) . ') ' : '' ?>Painel · Pagamentos</title>
+  <title><?= $g['pendentes'] ? '(' . count($g['pendentes']) . ') ' : '' ?>Painel · Pedidos</title>
   <?= pwa_tags_admin() ?>
   <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">💰</text></svg>') ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -136,13 +136,13 @@ function cartao_pedido(array $p, bool $acoes): string
 </head>
 <body class="admin-page">
   <header class="topbar adm-topbar">
-    <a class="brand" href="./"><span>💰 Painel <b>Pagamentos</b></span></a>
+    <a class="brand" href="./"><span>🧾 Painel <b>Pedidos</b></span></a>
     <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
     <nav id="adm-nav">
       <a href="visitas">📊 Visitas</a>
       <a href="enquetes">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
-      <a href="pedidos">💰 Pagamentos</a>
+      <a href="pedidos">🧾 Pedidos</a>
       <a href="logs">📜 Logs</a>
       <a href="atualizar">🚀 Atualizar</a>
       <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
@@ -159,13 +159,12 @@ function cartao_pedido(array $p, bool $acoes): string
       <p class="adm-flash adm-flash-<?= e($flash[0]) ?>"><?= e($flash[1]) ?></p>
     <?php endif; ?>
 
-    <?php if (!pix_configurado()): ?>
-      <p class="adm-flash adm-flash-erro">Pix desligado: defina <code>PIX_CHAVE</code>, <code>PIX_NOME</code> e <code>PIX_CIDADE</code> no <code>.env</code>. Sem isso ninguém consegue comprar.</p>
-    <?php endif; ?>
+    <p class="adm-flash">O site é grátis: os pedidos novos entram no pote na hora, sem conferência. Aqui fica o histórico.</p>
 
     <?php if ($dbErro): ?>
       <p class="adm-flash adm-flash-erro"><?= e($dbErro) ?></p>
     <?php else: ?>
+      <?php if ($g['pendentes']): // só pedidos antigos, do tempo do Pix ?>
       <section class="adm-section">
         <div class="adm-head">
           <h2>Aguardando conferência</h2>
@@ -173,11 +172,9 @@ function cartao_pedido(array $p, bool $acoes): string
         </div>
         <p class="adm-desc">Confira no extrato pelo <b>nome do titular</b>, o <b>valor</b> e o <b>horário</b>. Em destaque: há mais de <?= PEDIDO_ALERTA_MIN ?> minutos.
           Sem resposta em <?= PEDIDO_EXPIRA_HORAS ?> h, o pedido expira sozinho (e ainda dá para aprovar, se o Pix cair atrasado).</p>
-        <?php if (!$g['pendentes']): ?>
-          <div class="adm-card adm-empty">Nenhum pagamento esperando. 🎉</div>
-        <?php endif; ?>
         <div class="adm-history"><?php foreach ($g['pendentes'] as $p) echo cartao_pedido($p, true); ?></div>
       </section>
+      <?php endif; ?>
 
       <?php if ($g['expirados']): ?>
         <section class="adm-section">

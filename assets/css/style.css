@@ -618,6 +618,10 @@ h1, h2, h3 { font-family: var(--serif); line-height: 1.1; margin: 0 0 .5em; }
 .price small { font-size: .45em; font-family: var(--sans); font-weight: 500; color: var(--muted); }
 .olive-picker input:checked + span { border-color: var(--gold); background: var(--surface); }
 .olive-picker input:focus-visible + span { outline: 2px solid var(--gold-2); }
+/* tipo ainda não liberado (pedido_liberacao): apagado, com cadeado */
+.olive-picker label.is-locked span { opacity: .4; cursor: not-allowed; position: relative; }
+.olive-picker label.is-locked span::after { content: "🔒"; position: absolute; top: 4px; right: 6px; font-size: 13px; }
+#buy-libera { margin: -8px 0 16px; }
 
 .suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 18px; }
 .chip { border: 1px solid var(--line); background: none; color: var(--muted); border-radius: 999px; padding: .3em .8em; font: .78rem var(--sans); cursor: pointer; }

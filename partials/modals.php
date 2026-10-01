@@ -1,5 +1,5 @@
 <?php $firstType = array_key_first($S['types']); ?>
-<!-- MODAL COMPRA -->
+<!-- MODAL PEGAR (grátis) -->
 <div class="modal" id="buy-modal" hidden>
   <div class="modal-backdrop" data-close></div>
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="buy-title">
@@ -14,7 +14,7 @@
       <div class="cart" id="cart" hidden>
         <b class="cart-title">No seu pedido</b>
         <ul class="cart-list" id="cart-list"></ul>
-        <p class="cart-next" id="cart-next">Preencha abaixo para adicionar mais uma, ou continue para o pagamento.</p>
+        <p class="cart-next" id="cart-next">Preencha abaixo para adicionar mais uma, ou coloque no pote.</p>
       </div>
 
       <div class="olive-picker">
@@ -24,25 +24,20 @@
             <span>
               <?= item_svg($S, $val, '', min(1.3, $S['scales'][$val] ?? 1) * 1.1) ?>
               <?= e($t['label']) ?>
-              <em class="pick-price"><?= money($t['price']) ?><small>/ano</small></em>
             </span>
           </label>
         <?php endforeach; ?>
       </div>
-      <div class="qty-row">
-        <span>Quantidade <small>(iguais, no mesmo nome)</small></span>
-        <div class="qty">
-          <button type="button" data-qty="-1" aria-label="Menos uma">−</button>
-          <input type="number" name="qtd" id="qty-input" value="1" min="1" max="50" inputmode="numeric" aria-label="Quantidade">
-          <button type="button" data-qty="1" aria-label="Mais uma">+</button>
-        </div>
-      </div>
+      <!-- tipos liberados com o tempo (pedido_liberacao() no PHP): o app.js trava os outros e explica aqui -->
+      <p class="muted small" id="buy-libera"></p>
+      <!-- uma por vez, uma vez por dia neste pote -->
+      <input type="hidden" name="qtd" id="qty-input" value="1">
       <!-- quem já comprou: o cadastro (última compra) no lugar dos campos; "Alterar" / "Para outra pessoa" abre os campos -->
       <div class="cadastro-card" id="cadastro-card" hidden></div>
       <div id="buy-campos">
         <label class="presente-check">
           <input type="checkbox" name="presente">
-          <span>🎁 <b>É presente</b> para outra pessoa <small>Depois do pagamento, você recebe um link para mandar no WhatsApp: quem abrir resgata e ela vai para a conta dessa pessoa.</small></span>
+          <span>🎁 <b>É presente</b> para outra pessoa <small>Você recebe um link para mandar no WhatsApp: quem abrir resgata e ela vai para a conta dessa pessoa.</small></span>
         </label>
         <div class="photo-row">
           <label class="photo-pick" title="Escolher foto">
@@ -95,23 +90,21 @@
       </div>
       <p class="nivel-nudge" id="nivel-nudge" aria-live="polite"></p>
       <div class="buy-actions">
-        <button class="btn btn-ghost btn-block" type="button" id="add-more">+ Adicionar outra <?= e($S['item']) ?> <small>(outro tipo ou outra pessoa)</small></button>
-        <button class="btn btn-gold btn-block" type="submit">Continuar · <span data-price-total><?= money($S['types'][$firstType]['price']) ?></span>/ano</button>
+        <button class="btn btn-gold btn-block" type="submit">Colocar no pote · grátis</button>
       </div>
     </form>
 
-    <!-- passo 2: pagamento (Pix direto na conta; conferido à mão no painel /cozinha/pedidos) -->
+    <!-- passo 2: quem não entrou na conta informa o e-mail (a conta) -->
     <div class="step-pane" data-step="2" hidden>
-      <h2>Pague com Pix</h2>
-      <p class="muted small"><b id="pix-summary">1 <?= e($S['item']) ?></b> no pote por 12 meses + certificado + direito de publicar no mural e comentar nos dois potes.</p>
-      <div class="pix-area" id="buy-pix"></div>
+      <h2>Quase lá</h2>
+      <p class="muted small"><b id="conta-summary">1 <?= e($S['item']) ?></b> no pote por 12 meses + certificado, grátis.</p>
+      <div class="pix-area" id="buy-conta"></div>
       <button class="btn btn-link" data-back>← voltar</button>
     </div>
 
     <!-- passo 3: certificado -->
     <div class="step-pane" data-step="3" hidden>
       <h2><?= e($S['success']) ?></h2>
-      <p class="pix-aviso">⏳ <b>Pagamento em confirmação.</b></p>
       <p class="nivel-up" id="nivel-up" hidden></p>
       <p class="muted" id="bought-summary" hidden></p>
       <ul class="bought-list" id="bought-list" hidden></ul>
@@ -128,7 +121,7 @@
     <button class="modal-x" data-close aria-label="Fechar">×</button>
     <h2 id="renew-title">Renovar por mais 1 ano</h2>
     <div class="renew-body" id="renew-body"></div>
-    <div class="pix-area" id="renew-pix"></div>
+    <div class="pix-area" id="renew-acao"></div>
   </div>
 </div>
 
@@ -155,16 +148,6 @@
       </label>
       <button class="btn btn-gold btn-block" type="submit">Salvar</button>
     </form>
-  </div>
-</div>
-
-<!-- MODAL PIX PENDENTE ("Ver Pix" em Pagamentos aguardando confirmação) -->
-<div class="modal" id="pix-modal" hidden>
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pix-modal-title">
-    <button class="modal-x" data-close aria-label="Fechar">×</button>
-    <h2 id="pix-modal-title">Pagamento aguardando confirmação</h2>
-    <div class="pix-area" id="pix-modal-body"></div>
   </div>
 </div>
 

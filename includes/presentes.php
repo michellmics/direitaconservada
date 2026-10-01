@@ -33,7 +33,7 @@ function presente_resgatar(string $token, int $usuarioId): array
         }
         if ($item['status'] !== 'ativo') {
             $pdo->rollBack();
-            return ['erro' => 'Esse presente ainda está com o pagamento em conferência. Tente de novo daqui a pouco.'];
+            return ['erro' => 'Esse presente ainda não foi liberado. Tente de novo daqui a pouco.'];
         }
         if ((int) $item['usuario_id'] === $usuarioId) {
             $pdo->rollBack();

@@ -94,21 +94,20 @@ function email_vencimento(array $S, string $nome, array $itens): array
     foreach ($itens as $i) {
         $num = '#' . str_pad((string) $i['numero'], 4, '0', STR_PAD_LEFT);
         $validade = date('d/m/Y', strtotime($i['valido_ate']));
-        $preco = 'R$ ' . number_format((int) $i['preco_centavos'] / 100, 2, ',', '.');
         $lista .= '<div style="margin:0 0 10px;padding:12px 14px;background:#fff;border-radius:12px;border:1px solid #e4d9bd;">'
             . '<b>' . e($S['Item'] . ' ' . $i['tipo_nome'] . ' ' . $num) . '</b> · ' . e($i['nome'])
-            . '<br><span style="font-size:13px;color:#6b6a55;">Válida até <b style="color:' . $t['ink'] . ';">' . $validade . '</b> · renovação por ' . $preco . '/ano</span></div>';
-        $listaTexto .= "- {$S['Item']} {$i['tipo_nome']} {$num} ({$i['nome']}): válida até {$validade}, renovação por {$preco}/ano\n";
+            . '<br><span style="font-size:13px;color:#6b6a55;">Válida até <b style="color:' . $t['ink'] . ';">' . $validade . '</b> · renovação grátis</span></div>';
+        $listaTexto .= "- {$S['Item']} {$i['tipo_nome']} {$num} ({$i['nome']}): válida até {$validade}, renovação grátis\n";
     }
     $desde = date('d/m/Y', strtotime(min(array_column($itens, 'desde'))));
     $link = url_absoluta('perfil', ['lado' => $S['slug'], 'id' => (int) $itens[0]['numero']]);
 
     $corpo = "<p style=\"margin:0 0 12px;\">Olá, {$primeiro}!</p>
-          <p style=\"margin:0 0 16px;\"><b>" . e("$oque $verbo") . ".</b> Renove para continuar no pote, com sua frase no mural e o direito de publicar e comentar.</p>
+          <p style=\"margin:0 0 16px;\"><b>" . e("$oque $verbo") . ".</b> Renove grátis para continuar no pote, com sua frase no mural e o direito de publicar e comentar.</p>
           {$lista}
           <p style=\"margin:12px 0 20px;font-size:14px;\">Renovando <b>em dia</b>, você mantém o <b>“" . e($S['cert_since']) . " {$desde}”</b> e o anel de tempo (prata no 2º ano, ouro no 3º). Se deixar vencer, a data recomeça do zero.</p>
           " . email_botao($S, $link, $varios ? 'Renovar minhas ' . $S['items'] : 'Renovar minha ' . $S['item']) . "
-          <p style=\"margin:0;font-size:13px;color:#6b6a55;\">No seu perfil, toque em “Renovar” e pague pelo Pix. Já renovou? É só ignorar este e-mail.</p>";
+          <p style=\"margin:0;font-size:13px;color:#6b6a55;\">No seu perfil, toque em “Renovar”: é grátis. Já renovou? É só ignorar este e-mail.</p>";
     $html = email_moldura($S, $S['emoji'], $dias <= 1 ? 'Último aviso' : 'Aviso de vencimento', $corpo);
     $texto = "Olá, {$primeiro}!\n\n{$oque} {$verbo}.\n\n{$listaTexto}\nRenovando em dia, você mantém o \"{$S['cert_since']} {$desde}\" e o anel de tempo. "
         . "Se deixar vencer, a data recomeça do zero.\n\nRenove pelo seu perfil: {$link}\n";

@@ -498,13 +498,11 @@ function alerta_resumo_diario(bool $forcar = false): bool
     $um = fn(string $sql) => $pdo->query($sql)->fetch(PDO::FETCH_NUM);
     $ontem = "BETWEEN CURDATE() - INTERVAL 1 DAY AND CURDATE() - INTERVAL 1 SECOND";
 
-    [$criados, $criadosV] = $um("SELECT COUNT(*), COALESCE(SUM(total_centavos), 0) FROM pedidos WHERE criado_em $ontem");
-    [$pagos, $pagosV] = $um("SELECT COUNT(*), COALESCE(SUM(total_centavos), 0) FROM pedidos WHERE status = 'pago' AND resolvido_em $ontem");
-    [$expirados, $expiradosV] = $um("SELECT COUNT(*), COALESCE(SUM(total_centavos), 0) FROM pedidos WHERE status = 'expirado' AND resolvido_em $ontem");
-    [$negados] = $um("SELECT COUNT(*) FROM pedidos WHERE status = 'cancelado' AND resolvido_em $ontem");
-    [$pend, $pendV, $pendMin] = $um("SELECT COUNT(*), COALESCE(SUM(total_centavos), 0), MIN(criado_em) FROM pedidos WHERE status = 'pendente'");
-    [$mes, $mesV] = $um("SELECT COUNT(*), COALESCE(SUM(total_centavos), 0) FROM pedidos WHERE status = 'pago'
-                         AND resolvido_em >= DATE_FORMAT(CURDATE() - INTERVAL 1 DAY, '%Y-%m-01')");
+    // o site é grátis (migration 028): no lugar de vendas, quantos itens entraram nos potes
+    [$novos, $novosDir, $novosEsq] = $um("SELECT COUNT(*), COALESCE(SUM(lado = 'direita'), 0), COALESCE(SUM(lado = 'esquerda'), 0)
+                                          FROM itens WHERE criado_em $ontem AND status <> 'removido'");
+    [$pessoas] = $um("SELECT COUNT(DISTINCT usuario_id) FROM itens WHERE criado_em $ontem AND status <> 'removido'");
+    [$mes] = $um("SELECT COUNT(*) FROM itens WHERE status <> 'removido' AND criado_em >= DATE_FORMAT(CURDATE() - INTERVAL 1 DAY, '%Y-%m-01')");
     [$contas] = $um("SELECT COUNT(*) FROM usuarios WHERE criado_em $ontem");
     [$posts] = $um("SELECT COUNT(*) FROM posts WHERE is_frase_compra = 0 AND criado_em $ontem");
     [$coment] = $um("SELECT COUNT(*) FROM comentarios WHERE criado_em $ontem");
@@ -516,17 +514,12 @@ function alerta_resumo_diario(bool $forcar = false): bool
     [$erros, $seg, $limites, $painelFalha, $emailFalha] = $um("SELECT SUM(nivel = 'erro'), SUM(nivel = 'seguranca'), SUM(evento = 'limite_excedido'),
                                                                      SUM(evento IN ('painel_login_falha', 'painel_login_bloqueado')), SUM(evento = 'email_falha')
                                                               FROM logs WHERE criado_em $ontem");
-    $r = fn($c) => alerta_reais((int) $c);
     $dia = date('d/m/Y', strtotime('-1 day'));
 
-    $vendas = [
-        ['Pedidos gerados', "$criados · " . $r($criadosV)],
-        ['Pagos (aprovados)', "$pagos · " . $r($pagosV)],
-        ['Expirados sem pagamento', "$expirados · " . $r($expiradosV)],
-        ['Negados', (string) $negados],
-        ['Aguardando confirmação agora', "$pend · " . $r($pendV) . ($pendMin ? ' · mais antigo: ' . alerta_hora($pendMin) : '')],
-        ['Faturado no mês', "$mes pedido(s) · " . $r($mesV)],
-        ['Conversão do dia', $criados ? round($pagos / $criados * 100) . '% dos pedidos gerados' : '—'],
+    $potes = [
+        ['Itens novos nos potes', "$novos (🫒 $novosDir · 🌶️ $novosEsq)"],
+        ['Pessoas que pegaram item', (string) $pessoas],
+        ['Itens novos no mês', (string) $mes],
     ];
     $site = [
         ['Contas novas', (string) $contas],
@@ -545,8 +538,8 @@ function alerta_resumo_diario(bool $forcar = false): bool
         ['Senha errada / bloqueio no painel', (string) (int) $painelFalha],
         ['E-mails que falharam', (string) (int) $emailFalha],
     ];
-    return alerta_admin("📊 Resumo de $dia · " . $r($pagosV) . " em $pagos venda(s)", "Resumo de $dia",
-        [['Vendas', null, $vendas], ['Site', null, $site], ['Saúde do sistema', null, $saude]], '', 'cozinha/pedidos');
+    return alerta_admin("📊 Resumo de $dia · $novos item(ns) novo(s) e $contas conta(s)", "Resumo de $dia",
+        [['Potes', null, $potes], ['Site', null, $site], ['Saúde do sistema', null, $saude]], '', 'cozinha/visitas');
 }
 
 /** Banco fora do ar: e-mail direto (sem depender do MySQL), no máximo 1 por hora. */
@@ -560,6 +553,6 @@ function alerta_sem_banco(string $erro): void
     alerta_admin('🚨 Banco de dados fora do ar', 'Erro grave', [['O que aconteceu', null, [
         ['Quando', date('d/m/Y H:i:s')],
         ['Erro', mb_substr($erro, 0, 300)],
-        ['Efeito', 'O site não mostra os potes, não gera Pix e ninguém entra na conta até o MySQL voltar.'],
+        ['Efeito', 'O site não mostra os potes e ninguém entra na conta até o MySQL voltar.'],
     ]]], 'Confira o MySQL no cPanel e as credenciais DB_* do .env.');
 }

@@ -76,7 +76,7 @@ require __DIR__ . '/includes/header.php';
         <p>Esse é o presente que você deu. Mande o link para a pessoa: quem abrir primeiro e tocar em “Resgatar” fica com ele.</p>
         <a class="btn btn-gold btn-block" href="https://wa.me/?text=<?= rawurlencode('Te dei ' . ($S['item'] === 'pimenta' ? 'uma pimenta' : 'uma azeitona') . ' no pote ' . $S['name'] . '! ' . $S['emoji'] . ' Resgate aqui: ' . url_absoluta('presente', ['t' => $token])) ?>" target="_blank" rel="noopener">Mandar no WhatsApp</a>
       <?php elseif ($p['status'] !== 'ativo'): ?>
-        <p>O pagamento desse presente ainda está em conferência. Volte daqui a pouco para resgatar.</p>
+        <p>Esse presente ainda não foi liberado. Volte daqui a pouco para resgatar.</p>
       <?php else: ?>
         <p>Resgatando, ela vai para a sua conta: aparece no seu perfil e você publica, comenta e debate com o outro pote.</p>
         <?php if ($erro): ?><p class="auth-error"><?= e($erro) ?></p><?php endif; ?>

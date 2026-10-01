@@ -27,9 +27,10 @@ $topo = end($T['niveis']);
     <?php endforeach; ?>
   </ol>
   <ul class="niveis-regras">
-    <li><span aria-hidden="true"><?= $S['emoji'] ?></span><p><b>Cada R$ 1 em <?= e($S['items']) ?> no pote: +<?= $pts($R['por_real']) ?>.</b> Se uma vencer, os pontos dela saem; renovando em dia, ficam.</p></li>
+    <?php $porTipo = array_map(fn($t) => tempero_pontos_compra($t['price']), $S['types']); ?>
+    <li><span aria-hidden="true"><?= $S['emoji'] ?></span><p><b>Cada <?= e($S['item']) ?> no pote: +<?= num(min($porTipo)) ?> a +<?= $pts(max($porTipo)) ?>, conforme o tipo.</b> Se uma vencer, os pontos dela saem; renovando em dia (grátis), ficam.</p></li>
     <li><span aria-hidden="true">📝</span><p><b>Publicar no mural: +<?= $pts($R['post']) ?>. Comentar: +<?= $pts($R['comentario']) ?>.</b> Até <?= $R['comentarios_por_dia'] ?> comentários por dia contam, com pelo menos <?= $R['comentario_min'] ?> letras ou um vídeo.</p></li>
     <li><span aria-hidden="true">💬</span><p><b>Receber comentário: +<?= $pts($R['recebido']) ?>; de quem é <?= e($O['name']) ?> <?= $O['emoji'] ?>: +<?= $pts($R['recebido_outro']) ?>.</b> A cada <?= (int) round(1 / $R['curtida']) ?> curtidas recebidas: +<?= $pts(1) ?>.</p></li>
-    <li><span aria-hidden="true"><?= $topo['icone'] ?></span><p><b>O nível <?= e($topo['nome']) ?> exige também <?= money($R['topo_compra'] / $R['por_real']) ?> em <?= e($S['items']) ?> no pote.</b> A participação conta pelos últimos <?= $R['janela_meses'] ?> meses.</p></li>
+    <li><span aria-hidden="true"><?= $topo['icone'] ?></span><p><b>O nível <?= e($topo['nome']) ?> exige também <?= $pts($R['topo_compra']) ?> de <?= e($S['items']) ?> no pote.</b> A participação conta pelos últimos <?= $R['janela_meses'] ?> meses.</p></li>
   </ul>
 </section>

@@ -59,7 +59,7 @@ $curto = fn(?string $sha) => $sha ? substr($sha, 0, 7) : '—';
       <a href="visitas">📊 Visitas</a>
       <a href="enquetes">🗳️ Enquetes</a>
       <a href="frases">💬 Frases</a>
-      <a href="pedidos">💰 Pagamentos</a>
+      <a href="pedidos">🧾 Pedidos</a>
       <a href="logs">📜 Logs</a>
       <a href="atualizar">🚀 Atualizar</a>
     </nav>

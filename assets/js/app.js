@@ -22,7 +22,7 @@
   const OTHER = DC.sides[S.other];
 
   // ---------- a conta de quem está vendo (do banco, em DC; vazia para visitante) ----------
-  // DC.meus: itens da pessoa nos dois potes — "pendente" = Pix em conferência no painel: só ela vê, até aprovar.
+  // DC.meus: itens da pessoa nos dois potes ("pendente" = pedido antigo, do tempo do Pix: só ela via, até aprovar).
   // O que ela faz nesta visita (comprar, publicar, comentar, curtir) é salvo no servidor e entra nestas listas.
   const meusDe = (side) => ((DC.meus ||= {})[side] ||= []);
   const mine = meusDe(SIDE);                       // itens da pessoa neste pote
@@ -45,7 +45,7 @@
 
   // os itens da pessoa também vêm no pote público (os ativos): fica a versão da conta, na ordem dos números
   const meusIds = new Set(mine.map((o) => o.id));
-  // presentes que a pessoa deu: os pendentes (pagamento em conferência) só ela vê, então vêm da conta
+  // presentes que a pessoa deu: os pendentes (pedidos antigos, do tempo do Pix) só ela vê, então vêm da conta
   const presentesAqui = (DC.presentes || []).filter((o) => o.side === SIDE && o.pendente);
   const olives = [...DC.items.filter((o) => !meusIds.has(o.id) && !presentesAqui.some((p) => p.id === o.id)), ...mine, ...presentesAqui]
     .sort((a, b) => a.id - b.id);
@@ -87,7 +87,6 @@
   // link que vai para o compartilhamento: o perfil da pessoa
   const oliveUrl = (o) => new URL(profileUrl(o.side || SIDE, o.id), location.href).href;
   const typeLabel = (tipo, side = SIDE) => DC.sides[side].types[tipo]?.label || tipo;
-  const money = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const scaleOf = (o) => S.scales[o.tipo] || 1;
 
   // ---------- tempo de assinatura (mesma conta de ano_de_assinatura()/anel_de_tempo() no PHP) ----------
@@ -106,7 +105,9 @@
   const validade = (o) => o.valido_ate || addYear(o.desde);
   const vencido = (o) => validade(o) < todayIso();
   const noPote = () => olives.filter((o) => !vencido(o)); // vencidos saem do pote e do mural
+  const foraDoServidor = (o) => o.pendente || o.novo; // ainda fora das contagens que vieram do servidor (pôs no pote nesta visita)
   const diasAte = (iso) => Math.round((new Date(iso + 'T12:00:00') - new Date(todayIso() + 'T12:00:00')) / 86400000);
+  const RENOVA_DIAS = 30; // renovar (grátis) só nos últimos 30 dias ou depois de vencer: RENOVA_DIAS no PHP
 
   // desenho do item como <svg> avulso (certificado, etc.)
   const itemSvg = (tipo, side = SIDE, scale = 1) =>
@@ -352,8 +353,8 @@
 
   function updateStats() {
     const set = (sel, v) => { const el = $(sel); if (el) el.textContent = v.toLocaleString('pt-BR'); };
-    // o total vem do servidor (o navegador só tem o vidro); soma as compras pendentes da pessoa, que só ela vê
-    const pendentes = olives.filter((o) => o.pendente && !vencido(o));
+    // o total vem do servidor (o navegador só tem o vidro); soma o que a pessoa pôs no pote nesta visita
+    const pendentes = olives.filter((o) => foraDoServidor(o) && !vencido(o));
     const total = (DC.total ?? noPote().length) + (DC.total != null ? pendentes.length : 0);
     const hoje = (DC.hoje ?? 0) + pendentes.filter((o) => o.desde === todayIso()).length;
     set('#stat-total', total);
@@ -371,7 +372,7 @@
     return m;
   }
   function closeModals() {
-    if (compraFeita) aplicarCompra(false); // gerou o Pix e fechou sem "Já paguei": a compra aparece mesmo assim
+    if (compraFeita) aplicarCompra(false); // fechou antes de ver o certificado: a compra aparece mesmo assim
     $$('.modal').forEach((m) => { m.hidden = true; });
     document.body.style.overflow = '';
     if (location.hash.startsWith(`#${S.item}-`)) history.replaceState(null, '', location.pathname + location.search);
@@ -575,16 +576,40 @@
 
   document.addEventListener('click', (e) => {
     if (!e.target.closest('[data-open-buy]')) return;
+    if (LIB.hoje[SIDE]) { // uma por dia neste pote
+      toast(`Você já pegou sua ${S.item} de hoje. Volte amanhã para pegar mais uma! ${S.emoji}`, 5000);
+      return;
+    }
     goStep(1);
     openModal('#buy-modal');
     if (!cart.length) usarCadastro(); // quem já comprou não preenche de novo
+    travarTipos();
     updateTotal(); // mostra o aviso de nível já na abertura
     if (!usandoCadastro) buyForm.elements.nome.focus();
   });
-  // ---------- carrinho: várias azeitonas/pimentas na mesma compra ----------
-  const cart = []; // itens já adicionados: { tipo, nome, cidade, uf, frase, foto, selo, qtd }
+
+  // ---------- tipos liberados com o tempo (regra em pedido_liberacao() no PHP) ----------
+  // O 1º tipo já vem liberado; o próximo exige mais LIBERA_MESES de conta e mais LIBERA_FRUTAS frutas pegas (nos dois potes).
+  const LIB = (DC.liberacao ||= { nivel: 0, meses: 0, frutas: 0, hoje: {}, proximo: null, regra: { meses: 6, frutas: 300 } });
+  function travarTipos() {
+    const radios = $$('input[name="tipo"]', buyForm);
+    radios.forEach((r, i) => {
+      r.disabled = i > LIB.nivel;
+      r.closest('label').classList.toggle('is-locked', r.disabled);
+      r.closest('label').title = r.disabled ? `🔒 Libera com ${i * LIB.regra.meses} meses de conta e ${(i * LIB.regra.frutas).toLocaleString('pt-BR')} frutas pegas` : '';
+      if (r.disabled && r.checked) { r.checked = false; radios[0].checked = true; }
+    });
+    const p = LIB.proximo;
+    const prox = p && radios[LIB.nivel + 1] ? typeLabel(radios[LIB.nivel + 1].value) : null;
+    $('#buy-libera').innerHTML = prox
+      ? `🔒 <b>${esc(prox)}</b> libera com <b>${p.meses} meses</b> de conta e <b>${p.frutas.toLocaleString('pt-BR')} frutas</b> pegas (você tem ${LIB.meses} ${LIB.meses === 1 ? 'mês' : 'meses'} e ${LIB.frutas.toLocaleString('pt-BR')}). Uma ${S.item} por dia.`
+      : `Uma ${S.item} por dia.`;
+  }
+
+  // ---------- uma por vez: o "carrinho" leva só o item do formulário ----------
+  const cart = []; // fica vazio (antes dava para juntar várias no mesmo pedido)
   const qtyInput = $('#qty-input');
-  const QTY_MAX = 50;
+  const QTY_MAX = 1; // uma por vez, uma vez por dia (o servidor confere)
 
   const qtyValue = () => Math.min(QTY_MAX, Math.max(1, parseInt(qtyInput.value, 10) || 1));
   const entryPrice = (en) => S.types[en.tipo].price * en.qtd;
@@ -606,7 +631,7 @@
       foto: photoData,
       selo: f.get('selo') === 'custom' ? seloData : f.get('selo') || null,
       qtd: qtyValue(),
-      presente: !!buyForm.elements.presente?.checked, // 🎁: depois do pagamento, vira um link para entregar
+      presente: !!buyForm.elements.presente?.checked, // 🎁: vira um link para entregar
     };
   }
 
@@ -620,7 +645,6 @@
     $('#cart-list').innerHTML = cart.map((en, i) => `<li>
       ${itemSvg(en.tipo)}
       <span class="cart-desc"><b>${en.qtd}× ${esc(typeLabel(en.tipo))}</b> · ${en.presente ? '🎁 ' : ''}${esc(en.nome)}</span>
-      <span class="cart-price">${money(entryPrice(en))}</span>
       <button type="button" class="cart-remove" data-remove="${i}" aria-label="Remover">×</button>
     </li>`).join('');
     updateTotal();
@@ -628,7 +652,6 @@
 
   function updateTotal() {
     const total = totalNow();
-    $$('[data-price-total]', buyModal).forEach((el) => { el.textContent = money(total); });
     $('#nivel-nudge').innerHTML = nivelNudge(total);
   }
 
@@ -664,23 +687,6 @@
   });
   qtyInput.addEventListener('blur', () => { qtyInput.value = qtyValue(); updateTotal(); });
 
-  $('#add-more').addEventListener('click', () => {
-    if (!buyForm.reportValidity()) return;
-    cart.push(readEntry());
-    if (usandoCadastro) {
-      // a próxima também sai no cadastro (escolhe outro tipo) ou "Para outra pessoa"
-      qtyInput.value = 1;
-      cadastroIntocado = true;
-      renderCart();
-      toast(`Adicionada ao pedido. Escolha outro tipo para mais uma, ou continue para o pagamento.`, 3500);
-    } else {
-      clearItemFields();
-      renderCart();
-      toast(`Adicionada ao pedido. Agora preencha a próxima ${S.item}.`);
-      buyForm.elements.nome.focus({ preventScroll: true });
-    }
-    buyModal.querySelector('.modal-card').scrollTo({ top: 0, behavior: 'smooth' });
-  });
   // mexeu no tipo ou na quantidade: a "próxima" do cadastro passa a contar
   buyForm.addEventListener('change', (e) => { if (e.target.name === 'tipo' || e.target.name === 'qtd') cadastroIntocado = false; }, true);
   buyModal.addEventListener('click', (e) => { if (e.target.closest('[data-qty]')) cadastroIntocado = false; }, true);
@@ -843,7 +849,7 @@
     buyForm.elements.nome.focus();
   });
 
-  // Continuar: o que está no formulário entra no pedido (se foi preenchido) e vai para o Pix
+  // Colocar no pote (grátis): logado vai direto; sem login, pede só o e-mail (a conta) no passo 2
   buyForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const entries = [...cart];
@@ -852,17 +858,21 @@
       entries.push(readEntry());
     }
     pending = entries;
+    if (DC.logado) {
+      colocarNoPote(buyForm.querySelector('[type="submit"]'), null);
+      return;
+    }
     const count = entries.reduce((n, en) => n + en.qtd, 0);
-    $('#pix-summary').textContent = `${count} ${count > 1 ? S.items : S.item}`;
-    $('#buy-pix').innerHTML = pixDadosHtml(entries.reduce((s, en) => s + entryPrice(en), 0));
+    $('#conta-summary').textContent = `${count} ${count > 1 ? S.items : S.item}`;
+    $('#buy-conta').innerHTML = contaHtml();
     $('[data-back]', buyModal).hidden = false;
     goStep(2);
+    $('#buy-conta input[name="email"]')?.focus();
   });
   $('[data-back]', buyModal).addEventListener('click', updateTotal);
 
-  // ---------- Pix (sem gateway: o código vai direto para a chave do site; o painel confere e aprova) ----------
-  // DC.pedidos (do banco): { pendentes: [pedidos com o Pix], avisos: [resolvidos desde a última visita], titular }
-  const PED = (DC.pedidos ||= { pendentes: [], avisos: [], titular: null });
+  // DC.pedidos (do banco): { avisos: [pedidos antigos, do tempo do Pix, liberados desde a última visita] }
+  const PED = (DC.pedidos ||= { pendentes: [], avisos: [] });
 
   async function apiPedido(dados) {
     const res = await fetch('api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dados) });
@@ -871,97 +881,49 @@
     return json;
   }
 
-  // avisa o administrador (abriu o QR Code / copiou o código Pix); falhar aqui não atrapalha a compra
-  function avisarPix(codigo, evento) {
-    if (!codigo) return;
-    fetch('api/pedido', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
-      body: JSON.stringify({ acao: 'evento', codigo, evento }) }).catch(() => {});
-  }
-
-  // antes do código: e-mail (quem não entrou na conta) e o nome do titular da conta que vai pagar
-  function pixDadosHtml(total) {
-    return `<form class="pix-dados">
-      <p class="price">${money(total)}<small>/ano</small></p>
-      ${DC.logado ? '' : `<label class="field"><span>Seu e-mail</span><input type="email" name="email" required maxlength="190" autocomplete="email"></label>
-      <p class="muted small">É a sua conta: com ele você entra de novo, em qualquer aparelho.</p>`}
-      <label class="field"><span>Seu nome completo</span><input name="titular" required minlength="3" maxlength="100" autocomplete="name" value="${esc(PED.titular || '')}"></label>
-      <button class="btn btn-gold btn-block" type="submit">Gerar código Pix</button>
+  // sem login: o e-mail é a conta (e-mail novo cria e já entra; o que já tem conta recebe o código de acesso)
+  function contaHtml() {
+    return `<form class="conta-dados">
+      <label class="field"><span>Seu e-mail</span><input type="email" name="email" required maxlength="190" autocomplete="email"></label>
+      <p class="muted small">É a sua conta: com ele você entra de novo, em qualquer aparelho. É grátis.</p>
+      <button class="btn btn-gold btn-block" type="submit">Colocar no pote</button>
     </form>`;
   }
 
-  // o código: QR, copia e cola e o que acontece depois
-  function pixHtml(srv, comBotao) {
-    const sd = DC.sides[srv.lado];
-    return `<div class="pix">
-        <div class="qr qr-real">${srv.qr}</div>
-        <div>
-          <p class="price">${money(srv.total)}</p>
-          <p class="muted small">Pedido <b>${esc(srv.codigo)}</b> · pague <b>exatamente este valor</b>, pela conta de <b>${esc(srv.titular)}</b>.</p>
-          <button class="btn btn-ghost btn-sm" type="button" data-copiar-pix>Copiar código Pix</button>
-        </div>
-      </div>
-      <label class="field pix-code"><span>Pix copia e cola</span><textarea readonly rows="3" data-pedido="${esc(srv.codigo)}">${esc(srv.copiaCola)}</textarea></label>
-      <p class="pix-aviso">Conferimos o pagamento em poucos minutos.${comBotao ? ` Sua ${esc(sd.item)} já está no pote para você; para os outros, aparece assim que confirmarmos.` : ''} Se o pagamento não for encontrado, o pedido é cancelado.</p>
-      ${comBotao ? '<button class="btn btn-gold btn-block" type="button" data-ja-paguei>Já paguei</button>' : ''}`;
-  }
-
-  document.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-copiar-pix]');
-    if (!btn) return;
-    const area = btn.closest('.pix-area').querySelector('.pix-code textarea');
-    copiandoPix = true;
-    try { await navigator.clipboard.writeText(area.value); } catch { area.select(); document.execCommand('copy'); }
-    copiandoPix = false;
-    avisarPix(area.dataset.pedido, 'copiou');
-    toast('Código Pix copiado! Cole no app do seu banco, em Pix copia e cola.');
-  });
-  // copiou selecionando o texto do copia e cola (sem o botão)
-  let copiandoPix = false;
-  document.addEventListener('copy', (e) => {
-    const area = e.target.closest?.('.pix-code textarea');
-    if (area && !copiandoPix) avisarPix(area.dataset.pedido, 'copiou');
-  });
-
-  // envia o pedido. E-mail novo: a conta nasce e a pessoa já entra. E-mail que já tem conta: vai o código de acesso.
-  async function gerarPix(form, dados) {
-    const btn = form.querySelector('[type="submit"]');
-    const f = new FormData(form);
-    const titular = nomeProprio(f.get('titular'));
-    const email = (f.get('email') || '').trim();
+  // envia o pedido e, deu certo, mostra o certificado (passo 3) com a animação no pote
+  async function colocarNoPote(btn, email) {
+    const texto = btn.innerHTML;
     btn.disabled = true;
-    btn.textContent = 'Gerando…';
+    btn.textContent = 'Colocando no pote…';
     try {
-      const r = await apiPedido({ acao: 'criar', lado: SIDE, titular, email: email || undefined, ...dados });
+      const r = await apiPedido({ acao: 'criar', lado: SIDE, email: email || undefined, itens: pending });
       if (r.login) { // o carrinho continua nesta aba: o código é digitado em outra e depois é só continuar aqui
-        form.innerHTML = `<p class="pix-aviso">📧 ${esc(r.login)}</p>`
+        $('#buy-conta').innerHTML = `<p class="pix-aviso">📧 ${esc(r.login)}</p>`
           + (r.entrar ? `<a class="btn btn-gold btn-block" href="${esc(r.entrar)}" target="_blank" rel="noopener">Digitar o código</a>` : '');
-        return null;
+        goStep(2);
+        return;
       }
       if (r.entrou) DC.logado = true;
-      PED.titular = titular;
-      PED.pendentes.push(r.pedido);
-      renderPedidosPendentes();
-      return r;
+      LIB.hoje[SIDE] = true; // a próxima, só amanhã
+      LIB.frutas += r.itens.length;
+      compraFeita = r.itens;
+      resetCart();
+      mostrarCompra();
     } catch (err) {
       toast(err.message, 5000);
+    } finally {
       btn.disabled = false;
-      btn.textContent = 'Gerar código Pix';
-      return null;
+      btn.innerHTML = texto;
     }
   }
 
-  // a compra já está no banco (itens pendentes): aparece no "Já paguei" ou, se a pessoa fechar antes, sem animação
-  let compraFeita = null;
-  $('#buy-pix').addEventListener('submit', async (e) => {
+  $('#buy-conta').addEventListener('submit', (e) => {
     e.preventDefault();
-    const r = await gerarPix(e.target, { itens: pending });
-    if (!r) return;
-    compraFeita = r.itens;
-    $('[data-back]', buyModal).hidden = true; // o pedido já existe: voltar criaria outro
-    $('#buy-pix').innerHTML = pixHtml(r.pedido, true);
-    resetCart();
+    colocarNoPote(e.target.querySelector('[type="submit"]'), (new FormData(e.target).get('email') || '').trim());
   });
 
+  // a compra já está no banco: aparece com animação (ou, se o modal fechar antes, sem animação)
+  let compraFeita = null;
   function aplicarCompra(animar) {
     const bought = compraFeita || [];
     compraFeita = null;
@@ -977,7 +939,7 @@
       }
       if (animar) setTimeout(() => dropOlive(o), k * 160); // caem uma após a outra
     });
-    renderPedidosPendentes();
+    renderPresentes();
     if (!animar && $('#jar')) renderJar();
     limparTempero();
     updateStats();
@@ -990,11 +952,7 @@
     return { bought, nivelAntes };
   }
 
-  // "Já paguei": a compra aparece para a pessoa (só para ela) enquanto o painel confere
-  $('#buy-pix').addEventListener('click', (e) => {
-    if (!e.target.closest('[data-ja-paguei]')) return;
-    avisarPix($('#buy-pix .pix-code textarea')?.dataset.pedido, 'pagou'); // avisa o administrador para conferir o Pix
-    if (!compraFeita) return;
+  function mostrarCompra() {
     const { bought, nivelAntes } = aplicarCompra(true);
     if (!bought.length) return;
     const nivelNovo = meuNivel(SIDE);
@@ -1018,12 +976,7 @@
     $$('#bought-list li').forEach((li) => li.addEventListener('click', () => showCert(byId(Number(li.dataset.id)))));
     showCert(bought[0]);
     goStep(3);
-  });
-
-  // ---------- pagamentos aguardando confirmação (no pote e no perfil) ----------
-  const descricaoPedido = (p) => (p.renova
-    ? `renovação: ${DC.sides[p.lado].item} ${numero(p.renova)}`
-    : `${qtdItens(p.unidades, DC.sides[p.lado])} no pote ${DC.sides[p.lado].name}`);
+  }
 
   // mensagem do WhatsApp para entregar um presente
   const textoPresente = (o) => {
@@ -1031,57 +984,39 @@
     return `Te dei uma ${sd.item} no pote ${sd.name}! ${sd.emoji} Toque para resgatar e ela vai para a sua conta: ${o.link}`;
   };
 
-  function renderPedidosPendentes() {
+  // ---------- presentes para entregar (no pote e no perfil) ----------
+  function renderPresentes() {
     const box = $('#pedidos-pendentes');
     if (!box) return;
-    const lista = PED.pendentes;
     const presentes = DC.presentes || [];
-    box.hidden = !lista.length && !presentes.length;
-    box.innerHTML = (lista.length ? `<div class="pend-box">
-      <h3>⏳ ${lista.length > 1 ? 'Pagamentos aguardando' : 'Pagamento aguardando'} confirmação</h3>
-      <ul>${lista.map((p) => `<li style="${themeVars(DC.sides[p.lado])}">
-        <span><b>${money(p.total)}</b> · ${esc(descricaoPedido(p))}<small>Pedido ${esc(p.codigo)} · titular: ${esc(p.titular)}</small></span>
-        <button class="btn btn-ghost btn-sm" type="button" data-ver-pix="${esc(p.codigo)}">Ver Pix</button>
-      </li>`).join('')}</ul>
-      <p class="muted small">Já pagou? É só aguardar: conferimos em poucos minutos. Ainda não? Toque em <b>Ver Pix</b> e pague pelo app do banco.</p>
-    </div>` : '')
-    + (presentes.length ? `<div class="pend-box">
+    box.hidden = !presentes.length;
+    box.innerHTML = presentes.length ? `<div class="pend-box">
       <h3>🎁 ${presentes.length > 1 ? 'Presentes para entregar' : 'Presente para entregar'}</h3>
       <ul>${presentes.map((o) => `<li style="${themeVars(DC.sides[o.side])}">
         <span>${itemSvg(o.tipo, o.side)} <b>${esc(nomeProprio(o.nome))}</b> · ${numero(o.id)}
-          <small>${o.link ? 'Mande o link: quem abrir primeiro e tocar em “Resgatar” fica com ela.' : 'O link aparece aqui assim que confirmarmos o pagamento.'}</small></span>
+          <small>${o.link ? 'Mande o link: quem abrir primeiro e tocar em “Resgatar” fica com ela.' : 'O link aparece aqui em instantes.'}</small></span>
         ${o.link ? `<span class="pend-acoes">
           <a class="btn btn-gold btn-sm" href="https://wa.me/?text=${encodeURIComponent(textoPresente(o))}" target="_blank" rel="noopener">WhatsApp</a>
           <button class="btn btn-ghost btn-sm" type="button" data-copy="${esc(o.link)}">Copiar link</button>
         </span>` : '<span class="pend-espera">⏳</span>'}
       </li>`).join('')}</ul>
-    </div>` : '');
+    </div>` : '';
   }
 
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-ver-pix]');
-    if (!btn) return;
-    const p = PED.pendentes.find((x) => x.codigo === btn.dataset.verPix);
-    if (!p) return;
-    $('#pix-modal-body').innerHTML = `<p class="muted small">${esc(descricaoPedido(p))}</p>${pixHtml(p, false)}`;
-    openModal('#pix-modal');
-    avisarPix(p.codigo, 'qr');
-  });
-
-  // o que o painel resolveu desde a última visita (o servidor manda cada aviso uma vez só)
+  // pedidos antigos (do tempo do Pix) que foram liberados quando o site ficou grátis: avisa uma vez só
   function mostrarAvisos() {
-    const aprovadas = {};
-    const outros = [];
+    const liberadas = {};
+    let renovadas = 0;
     PED.avisos.forEach((p) => {
-      const sd = DC.sides[p.lado];
-      if (p.status === 'pago' && !p.renova) aprovadas[p.lado] = (aprovadas[p.lado] || 0) + p.unidades;
-      else if (p.status === 'pago') outros.push(`Pagamento confirmado! Renovação da ${sd.item} ${numero(p.renova)} garantida.`);
-      else if (p.status === 'expirado') outros.push(`O pedido ${p.codigo} expirou sem pagamento confirmado.`);
-      else outros.push(`Não encontramos o pagamento do pedido ${p.codigo}. Ele foi cancelado.`);
+      if (p.status !== 'pago') return;
+      if (p.renova) renovadas++;
+      else liberadas[p.lado] = (liberadas[p.lado] || 0) + p.unidades;
     });
-    const compras = Object.entries(aprovadas).map(([lado, n]) => `${qtdItens(n, DC.sides[lado])} no pote ${DC.sides[lado].name}`);
-    if (compras.length) outros.unshift(`Pagamento confirmado! ${compras.join(' e ')}, para todo mundo ver.`);
-    if (outros.length) toast(outros.join(' '), 7000);
+    const compras = Object.entries(liberadas).map(([lado, n]) => `${qtdItens(n, DC.sides[lado])} no pote ${DC.sides[lado].name}`);
+    const partes = [];
+    if (compras.length) partes.push(`${compras.join(' e ')}, para todo mundo ver.`);
+    if (renovadas) partes.push(`${renovadas > 1 ? 'Renovações garantidas' : 'Renovação garantida'}.`);
+    if (partes.length) toast(`Agora o site é grátis! ${partes.join(' ')}`, 7000);
   }
 
   // ---------- vídeos (YouTube / TikTok) ----------
@@ -1324,18 +1259,18 @@
   }
 
   // fatos da própria pessoa: os do servidor (itens ativos, posts, comentários e curtidas no banco) + o que ainda
-  // não está lá: itens pendentes (Pix em conferência) e o que ela fez nesta visita.
+  // não está lá: o que ela pôs no pote e fez nesta visita (e itens pendentes antigos, do tempo do Pix).
   // semItem: simula o nível sem um dos itens (ex.: se vencer).
   function fatosMeus(side, semItem = null) {
     const meus = meusDe(side);
     const itens = meus.filter((o) => !vencido(o) && o.id !== semItem);
     if (!itens.length) return fatosVazios();
-    const ativos = meus.filter((o) => !o.pendente);
+    const ativos = meus.filter((o) => !foraDoServidor(o));
     const dono = ativos.length ? TP.donos[side]?.[ativos[0].id] ?? ativos[0].id : null;
     const f = { ...fatosVazios(), ...(dono !== null ? TP.fatos[side]?.[dono] : null) };
     const preco = (o) => DC.sides[side].types[o.tipo].price;
-    meus.filter((o) => o.pendente && !vencido(o) && o.id !== semItem).forEach((o) => { f.reais += preco(o); });
-    const sem = meus.find((o) => o.id === semItem && !o.pendente && !vencido(o));
+    meus.filter((o) => foraDoServidor(o) && !vencido(o) && o.id !== semItem).forEach((o) => { f.reais += preco(o); });
+    const sem = meus.find((o) => o.id === semItem && !foraDoServidor(o) && !vencido(o));
     if (sem) f.reais = Math.max(0, f.reais - preco(sem));
     f.meses = mesesDesde(itens.map((o) => o.desde).sort()[0]);
     const ids = idsMeus(side);
@@ -2246,8 +2181,8 @@
     const soma = (uf, s, n) => { (c[uf] ??= Object.fromEntries(DUEL_ORDER.map((x) => [x, 0])))[s] += n; };
     DUEL_ORDER.forEach((s) => {
       Object.entries(DC.mapa?.contagem?.[s] || {}).forEach(([uf, n]) => soma(uf, s, n));
-      // os ativos já vêm na contagem do servidor; os pendentes (só a pessoa vê) somam aqui
-      meusDe(s).filter((o) => o.pendente && !vencido(o)).forEach((o) => soma(o.uf, s, 1));
+      // os ativos já vêm na contagem do servidor; os desta visita somam aqui
+      meusDe(s).filter((o) => foraDoServidor(o) && !vencido(o)).forEach((o) => soma(o.uf, s, 1));
     });
     return c;
   }
@@ -2591,7 +2526,7 @@
       const falta = faltaPara(t.p, t.n + 1);
       // já tem os pontos, mas o topo exige também compra
       prox = t.p.total >= R.faixas[t.n]
-        ? `O nível <b>${esc(pn.nome)}</b> ${pn.icone} exige também ${money(R.topo_compra / R.por_real)} em ${S.items} no pote: faltam ${money(falta / R.por_real)}.`
+        ? `O nível <b>${esc(pn.nome)}</b> ${pn.icone} exige também ${fmtPontos(SIDE, R.topo_compra)} de ${S.items} no pote: faltam ${fmtPontos(SIDE, falta)}.`
         : `Faltam <b>${fmtPontos(SIDE, falta)}</b> para o nível <b>${esc(pn.nome)}</b> ${pn.icone}.`;
       if (isMine) {
         prox += ` Com mais ${quantasFaltam(falta)} você chega lá${t.n + 1 < TOPO ? ' — ou publicando e comentando no mural' : ''}.`;
@@ -2686,19 +2621,18 @@
     const itemHtml = (x) => {
       const vale = validade(x);
       const faltam = diasAte(vale);
-      const preco = money(S.types[x.tipo].price);
       let status = '';
       let acoes = '';
       if (isMine) {
         if (x.pendente) {
-          status = '⏳ Pagamento em confirmação';
+          status = '⏳ Aguardando liberação';
         } else if (vencido(x)) {
           status = `Venceu em ${fmtDate(vale)} e saiu do pote. Renovando, a data recomeça.`;
-          acoes = `<button class="btn btn-gold btn-sm" type="button" data-renew="${x.id}">Voltar ao pote · ${preco}</button>`;
+          acoes = `<button class="btn btn-gold btn-sm" type="button" data-renew="${x.id}">Voltar ao pote · grátis</button>`;
         } else {
           status = `No pote até <b>${fmtDate(vale)}</b>${faltam <= 30 ? ` — <b>faltam ${faltam} ${faltam === 1 ? 'dia' : 'dias'}</b>` : ''}`
             + (faltam <= 30 ? ` ${nivelPerdaHtml(x)}` : '');
-          acoes = `<button class="btn btn-ghost btn-sm" type="button" data-renew="${x.id}">Renovar +1 ano · ${preco}</button>`;
+          if (faltam <= RENOVA_DIAS) acoes = `<button class="btn btn-ghost btn-sm" type="button" data-renew="${x.id}">Renovar +1 ano · grátis</button>`;
         }
         acoes = `<button class="btn btn-ghost btn-sm" type="button" data-view="${x.id}">Certificado</button>${acoes}`;
       }
@@ -2867,7 +2801,7 @@
 
   // ---------- renovação (mesma regra de renovar_item() no PHP) ----------
   // Em dia: +1 ano a partir do vencimento, mantendo o "desde". Vencido: recomeça hoje.
-  // O Pix fica aguardando no painel; a nova validade vale quando o pagamento for aprovado.
+  // Grátis: vale na hora (o servidor devolve as datas novas).
   const renovado = (o) => (vencido(o)
     ? { desde: todayIso(), valido_ate: addYear(todayIso()) }
     : { desde: o.desde, valido_ate: addYear(validade(o)) });
@@ -2886,22 +2820,25 @@
       ${emDia
         ? `<p class="renew-ok">✓ Continua <b>“${esc(S.cert_since)} ${fmtDate(o.desde)}”</b>${anelDe(o) ? ` e com o anel de ${anelDe(o)}` : ''}.<br>Nova validade: <b>${fmtDate(novaValidade)}</b>.</p>`
         : `<p class="renew-warn">⚠ Venceu em ${fmtDate(validade(o))}, então a data recomeça: <b>“${esc(S.cert_since)} ${fmtDate(todayIso())}”</b>.<br>Validade: <b>${fmtDate(novaValidade)}</b>.</p>`}`;
-    const espera = PED.pendentes.find((p) => p.lado === SIDE && p.renova === o.id);
-    $('#renew-pix').innerHTML = o.pendente
-      ? `<p class="pix-aviso">⏳ O pagamento desta ${esc(S.item)} ainda está em confirmação. A renovação fica disponível depois.</p>`
-      : espera
-        ? `<p class="pix-aviso">Já existe uma renovação aguardando confirmação para esta ${esc(S.item)}.</p>${pixHtml(espera, false)}`
-        : pixDadosHtml(S.types[o.tipo].price);
+    $('#renew-acao').innerHTML = `<button class="btn btn-gold btn-block" type="button" data-renovar-ja>Renovar grátis</button>`;
     openModal('#renew-modal');
-    if (!o.pendente && espera) avisarPix(espera.codigo, 'qr');
   });
 
-  $('#renew-pix')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!renewing) return;
-    const r = await gerarPix(e.target, { renovar: renewing.id });
-    if (!r) return;
-    $('#renew-pix').innerHTML = `${pixHtml(r.pedido, false)}<p class="pix-aviso">Assim que confirmarmos o pagamento, a nova validade passa a valer.</p>`;
+  $('#renew-acao')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-renovar-ja]');
+    if (!btn || !renewing) return;
+    btn.disabled = true;
+    btn.textContent = 'Renovando…';
+    try {
+      const r = await apiPedido({ acao: 'criar', lado: SIDE, renovar: renewing.id });
+      Object.assign(renewing, { desde: r.renovado.desde, valido_ate: r.renovado.valido_ate });
+      toast(`Renovada! ${S.Item} ${numero(renewing.id)} fica no pote até ${fmtDate(r.renovado.valido_ate)}.`, 4000);
+      location.reload(); // perfil, níveis e pote redesenhados com o que ficou salvo
+    } catch (err) {
+      toast(err.message, 5000);
+      btn.disabled = false;
+      btn.textContent = 'Renovar grátis';
+    }
   });
 
   document.addEventListener('click', async (e) => {
@@ -2951,9 +2888,9 @@
   renderNewest();
   renderMapa();
   garantirLinksLocais(); // links cifrados das compras feitas neste navegador
-  // pagamentos: o que o painel aprovou ou negou desde a última visita, e os que ainda aguardam
+  // pedidos antigos liberados desde a última visita e os presentes para entregar
   mostrarAvisos();
-  renderPedidosPendentes();
+  renderPresentes();
   // link para um estado: pote?c=…#mapa-SP (usado no "Chamar reforço")
   const hashUf = location.hash.match(/^#mapa-([A-Z]{2})$/);
   if (hashUf && $(`#mapa .uf[data-uf="${hashUf[1]}"]`)) {

@@ -9,8 +9,8 @@ Cada pote tem seu mural, ranking e certificado. **Qualquer conta (cadastro grát
 (migration 027: `posts`/`comentarios` guardam `usuario_id`; `item_id` NULL = conta sem item, aparece com o nome da conta, sem perfil
 nem nível). Desafiar e ser desafiado no Tretódromo exige azeitona ou pimenta ativa; votar só exige login.
 
-**Estado atual:** tudo no banco (MySQL). Compras por Pix conferidas à mão no painel; itens, posts, comentários, curtidas e
-pedidos são da conta de quem está logado (nada de dados só no navegador).
+**Estado atual:** tudo no banco (MySQL). **Tudo grátis** (sem cobrança; receita pelo Google AdSense); itens, posts,
+comentários, curtidas e pedidos são da conta de quem está logado (nada de dados só no navegador).
 
 ## Rodar localmente
 
@@ -69,21 +69,22 @@ No painel você cria **enquetes** — só uma fica no ar por vez (publicar uma n
 Cada enquete pode aparecer nos dois potes (**duelo**, com resultado separado por lado) ou em um só.
 Os votos vão para o banco (`enquete_votos`), um por navegador, até existir login.
 
-## Pagamento por Pix (sem gateway, migration 012)
+## Site grátis (migration 028; a receita vem do Google AdSense)
 
-- O gerador de QR code também está na `vendor/` (no git). No `.env`: `PIX_CHAVE`, `PIX_NOME`, `PIX_CIDADE`.
-- Na compra, a pessoa informa o **nome do titular da conta que vai pagar**; o site gera o Pix copia e cola + QR com o
-  valor exato, direto para a sua chave (`includes/pix.php`).
+- Pegar azeitona/pimenta **não custa nada**: os itens nascem `ativo` na hora, valem 1 ano e renovar também é grátis
+  (só nos últimos 30 dias antes de vencer, ou depois de vencido: `RENOVA_DIAS`). Não há mais Pix (`includes/pix.php` saiu).
+- **Uma por vez, uma vez por dia em cada pote** (1 azeitona + 1 pimenta por dia). Todo mundo começa só com o tipo básico
+  (Verde / Biquinho); o tipo seguinte libera a cada `LIBERA_MESES` (6) meses de conta **e** `LIBERA_FRUTAS` (300) frutas
+  pegas, somando os dois potes: 2º tipo = 6 meses + 300, 3º = 12 + 600, 4º = 18 + 900 (`pedido_liberacao()` em
+  `includes/pedidos.php`; o modal trava os outros com 🔒).
+- O pedido continua sendo gravado (`pedidos` com `status = 'pago'`, total 0, `gateway = 'gratis'`): é o histórico em `/cozinha/pedidos`.
+- O `price` dos tipos em `includes/sides.php` virou só o peso do tipo nos níveis e no rei do estado (nunca aparece em reais).
+- A migration 028 liberou os pedidos que estavam aguardando Pix (compra e renovação); a pessoa vê o aviso na próxima visita.
 - **Conta:** sem login, ela digita o e-mail. E-mail novo → a conta nasce e ela já entra. E-mail que já tem conta → recebe
   um código de acesso por e-mail (ninguém entra na conta dos outros digitando o e-mail deles).
-- **A compra é o cadastro:** na próxima, nome, cidade/UF, foto, selo e frase vêm da última compra ("Alterar" / "Para outra pessoa").
-- Os itens nascem no banco como **`pendente`** (migration 013): só a dona vê, e pode publicar e comentar com eles. A cobrança
-  fica em "Pagamento aguardando confirmação" (no pote e no perfil), com o botão "Ver Pix".
-- Você confere o extrato em **`/cozinha/pedidos`** (nome do titular + valor + horário) e **aprova** (itens `ativo`: aparecem
-  para todo mundo, com o que ela publicou/comentou) ou **nega** (itens `removido`: somem com tudo). Pendente há mais de
-  20 min fica em destaque; em 24 h expira sozinho (ainda dá para aprovar, se o Pix cair atrasado). Na próxima visita ela
-  vê o aviso do que aconteceu. Renovação segue o mesmo caminho (a nova validade vale ao aprovar).
+- **O pedido é o cadastro:** na próxima, nome, cidade/UF, foto, selo e frase vêm do último ("Alterar" / "Para outra pessoa").
 - Fotos e selos enviados ficam em `uploads/pedidos/` (fora do git; só imagem é servida).
+- O `ads.txt` (AdSense) fica na raiz do site.
 
 ## Perfil por pessoa e presentes (migration 015)
 

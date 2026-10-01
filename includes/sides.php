@@ -74,7 +74,8 @@ const SIDES = [
                 ['nome' => 'Oliveira Centenária', 'icone' => '🫒👑'],
             ],
         ],
-        // tipos na ordem de preço (o 1º já vem marcado na compra); 'logo' = desenho usado no topo
+        // tipos (o 1º já vem marcado no pedido); 'logo' = desenho usado no topo. O site é grátis: 'price' é só o peso
+        // do tipo nos níveis (tempero) e no rei do estado, nunca aparece em reais nem é cobrado
         'types' => [
             'verde'    => ['label' => 'Verde',    'price' => 2.90],
             'recheada' => ['label' => 'Recheada', 'price' => 4.90],
@@ -244,11 +245,6 @@ const SIDES = [
 function side(string $slug): array
 {
     return SIDES[$slug] ?? SIDES['direita'];
-}
-
-function min_price(array $S): float
-{
-    return min(array_column($S['types'], 'price'));
 }
 
 // variáveis CSS do tema, para usar em style="..."

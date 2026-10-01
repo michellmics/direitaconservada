@@ -1,25 +1,26 @@
 <?php
-// Pedidos pagos por Pix sem gateway (tabelas pedidos, pedido_itens e itens; migrations 012 e 013).
+// Pedidos (tabelas pedidos, pedido_itens e itens). O site é GRÁTIS (migration 028): não há cobrança.
 //
-//   1. A pessoa monta o pedido e informa o nome do titular da conta que vai pagar. Sem login: e-mail novo cria a
-//      conta e já entra; e-mail que já tem conta recebe o código de acesso (ninguém entra na conta dos outros).
-//   2. Na hora nascem os itens com status 'pendente' (e a frase no mural): só a dona vê, até o painel aprovar.
-//   3. O administrador confere o extrato em /cozinha/pedidos:
-//        aprovar → itens 'ativo' (para todo mundo, 1 ano a partir de hoje) ou a renovação é aplicada;
-//        negar   → itens 'removido' (somem, com o que foi publicado/comentado com eles).
-//   Pendente há mais de PEDIDO_EXPIRA_HORAS vira "expirado" (itens 'removido'); ainda dá para aprovar se o Pix
-//   cair atrasado. Na próxima visita a pessoa vê o aviso do que aconteceu (pedidos.avisado_em).
+//   1. A pessoa monta o pedido. Sem login: e-mail novo cria a conta e já entra; e-mail que já tem conta recebe o
+//      código de acesso (ninguém entra na conta dos outros).
+//   2. Na hora nascem os itens já 'ativo' (para todo mundo, por 1 ano) e a frase no mural. O pedido fica
+//      registrado como 'pago' com total 0 (histórico). Renovar também é grátis e vale na hora.
+//   Freio (antes era o preço): uma fruta por vez, uma vez por dia em cada pote, e os tipos vão sendo liberados
+//   com o tempo de conta e as frutas já pegas (pedido_liberacao()).
+//   Aprovar, negar e expirar ficaram só para os pedidos antigos, do tempo do Pix.
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/banco_dados.php';
-require_once __DIR__ . '/pix.php';
 require_once __DIR__ . '/itens.php';
 
 const PEDIDO_EXPIRA_HORAS    = 24;
 const PEDIDO_ALERTA_MIN      = 20;  // no painel, pendente há mais tempo que isso fica em destaque
-const PEDIDO_MAX_LINHAS      = 10;  // linhas no carrinho
-const PEDIDO_MAX_UNIDADES    = 100;
-const PEDIDO_MAX_PENDENTES   = 5;   // por pessoa e por IP, ao mesmo tempo
+// Uma fruta por vez, uma vez por dia em cada pote. Os tipos vão sendo liberados (na ordem de includes/sides.php):
+// o 1º (básico) já vem liberado; o tipo N+1 exige N × LIBERA_MESES de conta e N × LIBERA_FRUTAS frutas já pegas
+// (somando os dois potes, presentes dados incluídos). Igual no app.js (DC.liberacao vem daqui).
+const LIBERA_MESES           = 6;
+const LIBERA_FRUTAS          = 300;
+const RENOVA_DIAS            = 30;  // renovar só nos últimos 30 dias antes de vencer (ou depois de vencido); igual no app.js
 const PEDIDO_UPLOADS         = 'uploads/pedidos'; // fotos e selos enviados (relativo à raiz do site)
 const PEDIDO_CODIGO_LETRAS   = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // sem 0/O, 1/I/L
 
@@ -204,97 +205,158 @@ function pedido_validar_linha(string $lado, array $en, array $tipos, ?int $usuar
 }
 
 /**
- * Cria o pedido. $in = { lado, titular, email?, itens: [{ tipo, nome, cidade, uf, frase, foto, selo, qtd }] }
- * ou, para renovar, { lado, titular, renovar: número do item no pote }.
- * Preço sempre do banco (nunca do navegador).
- * Retorna ['pedido' => …, 'itens' => [...], 'entrou' => bool] | ['login' => mensagem] | ['erro' => mensagem].
+ * O que a conta pode pegar agora: ['nivel' => quantos tipos além do básico estão liberados, 'meses', 'frutas',
+ * 'hoje' => [lado => já pegou hoje?], 'proximo' => ['meses', 'frutas'] do próximo tipo (null = todos liberados)].
+ * Sem conta: só o básico, nada pego hoje.
+ */
+function pedido_liberacao(?int $usuarioId): array
+{
+    $maxNivel = max(array_map(fn($S) => count($S['types']), SIDES)) - 1;
+    $meses = 0;
+    $frutas = 0;
+    $hoje = array_fill_keys(array_keys(SIDES), false);
+    if ($usuarioId) {
+        $pdo = db();
+        $st = $pdo->prepare('SELECT TIMESTAMPDIFF(MONTH, criado_em, NOW()) FROM usuarios WHERE id = ?');
+        $st->execute([$usuarioId]);
+        $meses = (int) $st->fetchColumn();
+        // frutas pegas = o que a conta pediu e entrou no pote (inclui as compras antigas, do tempo do Pix)
+        $st = $pdo->prepare("SELECT COALESCE(SUM(pi.quantidade), 0) FROM pedido_itens pi JOIN pedidos p ON p.id = pi.pedido_id
+                             WHERE p.usuario_id = ? AND p.status = 'pago' AND pi.renova_item_id IS NULL");
+        $st->execute([$usuarioId]);
+        $frutas = (int) $st->fetchColumn();
+        $st = $pdo->prepare("SELECT DISTINCT p.lado FROM pedidos p JOIN pedido_itens pi ON pi.pedido_id = p.id
+                             WHERE p.usuario_id = ? AND p.status IN ('pago', 'pendente') AND pi.renova_item_id IS NULL
+                               AND p.criado_em >= CURDATE()");
+        $st->execute([$usuarioId]);
+        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $lado) {
+            $hoje[$lado] = true;
+        }
+    }
+    $nivel = min($maxNivel, intdiv($meses, LIBERA_MESES), intdiv($frutas, LIBERA_FRUTAS));
+    return [
+        'nivel'   => $nivel,
+        'meses'   => $meses,
+        'frutas'  => $frutas,
+        'hoje'    => $hoje,
+        'proximo' => $nivel < $maxNivel ? ['meses' => ($nivel + 1) * LIBERA_MESES, 'frutas' => ($nivel + 1) * LIBERA_FRUTAS] : null,
+        'regra'   => ['meses' => LIBERA_MESES, 'frutas' => LIBERA_FRUTAS],
+    ];
+}
+
+/** Pode subir de nível (e avisa por e-mail). Falhar aqui não desfaz nada: o nível se acerta no próximo recálculo. */
+function pedido_recalcular_nivel(int $usuarioId, string $lado): void
+{
+    try {
+        require_once __DIR__ . '/tempero.php';
+        tempero_recalcular($usuarioId, $lado);
+    } catch (Throwable $e) {
+    }
+}
+
+/**
+ * Renova grátis, na hora, um item da pessoa (ativo ou vencido) por mais 1 ano — regra em renovar_item().
+ * Retorna ['renovado' => ['numero', 'desde', 'valido_ate']] | ['erro' => mensagem].
+ */
+function pedido_renovar(string $lado, int $numero, ?array $logado): array
+{
+    if (!$logado) {
+        return ['erro' => 'Entre na sua conta para renovar.'];
+    }
+    $uid = (int) $logado['id'];
+    $pdo = db();
+    $st = $pdo->prepare("SELECT id, status, valido_ate > CURDATE() + INTERVAL " . RENOVA_DIAS . " DAY AS cedo FROM itens
+                         WHERE lado = ? AND numero = ? AND usuario_id = ? AND status IN ('ativo', 'vencido')");
+    $st->execute([$lado, $numero, $uid]);
+    $item = $st->fetch();
+    if (!$item) {
+        return ['erro' => 'Não encontramos esse item na sua conta.'];
+    }
+    if ($item['cedo']) {
+        return ['erro' => 'Dá para renovar nos últimos ' . RENOVA_DIAS . ' dias antes de vencer.'];
+    }
+    $pdo->beginTransaction();
+    try {
+        renovar_item((int) $item['id']);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+    pedido_recalcular_nivel($uid, $lado);
+    $st = $pdo->prepare('SELECT desde, valido_ate FROM itens WHERE id = ?');
+    $st->execute([(int) $item['id']]);
+    return ['renovado' => ['numero' => $numero] + $st->fetch()];
+}
+
+/**
+ * Cria o pedido (grátis: os itens já nascem ativos). $in = { lado, email?, itens: [{ tipo, nome, cidade, uf, frase, foto, selo, qtd }] }
+ * ou, para renovar, { lado, renovar: número do item no pote }.
+ * Retorna ['pedido' => …, 'itens' => [...], 'entrou' => bool] | ['renovado' => …] | ['login' => mensagem] | ['erro' => mensagem].
  */
 function pedido_criar(array $in, ?array $logado, string $ip): array
 {
-    if (!pix_configurado()) {
-        return ['erro' => 'Pagamento indisponível no momento.'];
-    }
     $lado = (string) ($in['lado'] ?? '');
     if (!isset(SIDES[$lado])) {
         return ['erro' => 'Pote inválido.'];
     }
-    $titular = nome_proprio(mb_substr((string) ($in['titular'] ?? ''), 0, 100));
-    if (mb_strlen($titular) < 3) {
-        return ['erro' => 'Informe o nome do titular da conta que vai pagar.'];
+    if (isset($in['renovar'])) {
+        return pedido_renovar($lado, (int) $in['renovar'], $logado);
     }
     $pdo = db();
-    pedidos_expirar();
 
-    $st = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE ip = ? AND status = 'pendente'");
-    $st->execute([$ip]);
-    if ((int) $st->fetchColumn() >= PEDIDO_MAX_PENDENTES) {
-        return ['erro' => 'Você já tem vários pagamentos aguardando confirmação. Espere a confirmação deles.'];
+    $S = SIDES[$lado];
+    // uma fruta por vez, de um tipo já liberado para a conta, e uma vez por dia neste pote
+    $entradas = is_array($in['itens'] ?? null) ? $in['itens'] : [];
+    if (count($entradas) !== 1 || !is_array($entradas[0]) || (int) ($entradas[0]['qtd'] ?? 1) !== 1) {
+        return ['erro' => "É uma {$S['item']} por vez."];
     }
-
-    $linhas = [];
-    if (isset($in['renovar'])) {
-        if (!$logado) {
-            return ['erro' => 'Entre na sua conta para renovar.'];
-        }
-        $st = $pdo->prepare("SELECT i.*, t.preco_centavos FROM itens i JOIN item_tipos t ON t.id = i.item_tipo_id
-                             WHERE i.lado = ? AND i.numero = ? AND i.usuario_id = ? AND i.status IN ('ativo', 'vencido')");
-        $st->execute([$lado, (int) $in['renovar'], (int) $logado['id']]);
-        $item = $st->fetch();
-        if (!$item) {
-            return ['erro' => 'Não encontramos esse item na sua conta.'];
-        }
-        $linhas[] = ['item_tipo_id' => $item['item_tipo_id'], 'preco' => (int) $item['preco_centavos'], 'qtd' => 1,
-                     'nome' => $item['nome'], 'cidade' => $item['cidade'], 'uf' => $item['uf'], 'frase' => $item['frase'],
-                     'foto' => null, 'selo_tipo' => null, 'selo_valor' => null, 'renova' => (int) $item['id'], 'presente' => false];
-    } else {
-        $entradas = is_array($in['itens'] ?? null) ? $in['itens'] : [];
-        if (!$entradas || count($entradas) > PEDIDO_MAX_LINHAS) {
-            return ['erro' => 'Pedido vazio ou grande demais.'];
-        }
-        $st = $pdo->prepare('SELECT slug, id, preco_centavos FROM item_tipos WHERE lado = ? AND ativo = 1');
-        $st->execute([$lado]);
-        $tipos = [];
-        foreach ($st->fetchAll() as $t) {
-            $tipos[$t['slug']] = ['id' => (int) $t['id'], 'preco_centavos' => (int) $t['preco_centavos']];
-        }
-        foreach ($entradas as $en) {
-            [$linha, $erro] = is_array($en) ? pedido_validar_linha($lado, $en, $tipos, $logado ? (int) $logado['id'] : null) : [null, 'Pedido inválido.'];
-            if ($erro) {
-                pedido_descartar_imagens($linhas);
-                return ['erro' => $erro];
-            }
-            $linhas[] = $linha;
-        }
-        if (array_sum(array_column($linhas, 'qtd')) > PEDIDO_MAX_UNIDADES) {
-            pedido_descartar_imagens($linhas);
-            return ['erro' => 'Pedido grande demais.'];
-        }
+    $erroDia = "Você já pegou sua {$S['item']} de hoje. Volte amanhã para pegar mais uma!";
+    $libera = pedido_liberacao($logado ? (int) $logado['id'] : null);
+    if ($libera['hoje'][$lado]) {
+        return ['erro' => $erroDia];
     }
+    $ordem = array_search((string) ($entradas[0]['tipo'] ?? ''), array_keys($S['types']), true);
+    if ($ordem !== false && $ordem > $libera['nivel']) {
+        return ['erro' => "{$S['Item']} " . $S['types'][$entradas[0]['tipo']]['label'] . ' ainda não foi liberada para você.'];
+    }
+    $st = $pdo->prepare('SELECT slug, id, preco_centavos FROM item_tipos WHERE lado = ? AND ativo = 1');
+    $st->execute([$lado]);
+    $tipos = [];
+    foreach ($st->fetchAll() as $t) {
+        $tipos[$t['slug']] = ['id' => (int) $t['id'], 'preco_centavos' => (int) $t['preco_centavos']];
+    }
+    [$linha, $erro] = pedido_validar_linha($lado, ['qtd' => 1] + $entradas[0], $tipos, $logado ? (int) $logado['id'] : null);
+    if ($erro) {
+        return ['erro' => $erro];
+    }
+    $linhas = [$linha];
 
-    $u = pedido_usuario($logado, (string) ($in['email'] ?? ''), $titular, $lado);
+    $u = pedido_usuario($logado, (string) ($in['email'] ?? ''), $linha['nome'], $lado);
     if (!isset($u['id'])) {
         pedido_descartar_imagens($linhas);
         return $u; // erro ou "enviamos o link"
     }
-    $st = $pdo->prepare("SELECT COUNT(*) FROM pedidos WHERE usuario_id = ? AND status = 'pendente'");
-    $st->execute([$u['id']]);
-    if ((int) $st->fetchColumn() >= PEDIDO_MAX_PENDENTES) {
-        pedido_descartar_imagens($linhas);
-        return ['erro' => 'Você já tem vários pagamentos aguardando confirmação. Espere a confirmação deles.'];
-    }
 
-    $total = array_sum(array_map(fn($l) => $l['preco'] * $l['qtd'], $linhas));
     $numeros = [];
     $comPost = []; // números que ganharam a frase no mural
     $pdo->beginTransaction();
     try {
+        // trava a conta: duas abas ao mesmo tempo não pegam duas no mesmo dia
+        $pdo->prepare('SELECT id FROM usuarios WHERE id = ? FOR UPDATE')->execute([$u['id']]);
+        if (pedido_liberacao($u['id'])['hoje'][$lado]) {
+            $pdo->rollBack();
+            pedido_descartar_imagens($linhas);
+            return ['erro' => $erroDia];
+        }
         for ($tentativa = 0; ; $tentativa++) {
             $codigo = pedido_codigo_novo();
             try {
-                $pdo->prepare("INSERT INTO pedidos (codigo, usuario_id, lado, status, subtotal_centavos, total_centavos, metodo, gateway,
-                                                    pix_copia_cola, pagador_nome, ip, expira_em)
-                               VALUES (?, ?, ?, 'pendente', ?, ?, 'pix', 'manual', ?, ?, ?, NOW() + INTERVAL " . PEDIDO_EXPIRA_HORAS . ' HOUR)')
-                    ->execute([$codigo, $u['id'], $lado, $total, $total, pix_copia_cola($total, $codigo), $titular, $ip]);
+                // grátis: o pedido só fica de histórico (já resolvido e avisado)
+                $pdo->prepare("INSERT INTO pedidos (codigo, usuario_id, lado, status, subtotal_centavos, total_centavos, gateway, ip,
+                                                    pago_em, resolvido_em, avisado_em)
+                               VALUES (?, ?, ?, 'pago', 0, 0, 'gratis', ?, NOW(), NOW(), NOW())")
+                    ->execute([$codigo, $u['id'], $lado, $ip]);
                 break;
             } catch (PDOException $e) {
                 if ($tentativa >= 3 || $e->errorInfo[1] !== 1062) { // 1062 = código repetido: sorteia outro
@@ -306,21 +368,18 @@ function pedido_criar(array $in, ?array $logado, string $ip): array
         $insLinha = $pdo->prepare('INSERT INTO pedido_itens (pedido_id, item_tipo_id, quantidade, preco_unit_centavos, nome_certificado, cidade, uf,
                                                              frase, foto_path, selo_tipo, selo_valor, renova_item_id, presente)
                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        // compra: os itens já nascem (pendentes, só a dona vê) com o número no pote e a frase no mural
+        // os itens já nascem ativos (para todo mundo) com o número no pote e a frase no mural
         $insItem = $pdo->prepare("INSERT INTO itens (lado, numero, usuario_id, pedido_item_id, presente_token, item_tipo_id, nome, cidade, uf, frase,
                                                      foto_path, selo_tipo, selo_valor, desde, valido_ate, status)
-                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), CURDATE() + INTERVAL 1 YEAR, 'pendente')");
+                                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), CURDATE() + INTERVAL 1 YEAR, 'ativo')");
         $insPost = $pdo->prepare('INSERT INTO posts (lado, item_id, usuario_id, texto, is_frase_compra) VALUES (?, ?, ?, ?, 1)');
         // frase que a pessoa já tem no mural (compra anterior, com o cadastro) não vira post de novo
         $jaNoMural = $pdo->prepare("SELECT 1 FROM posts p JOIN itens i ON i.id = p.item_id
                                     WHERE i.usuario_id = ? AND p.lado = ? AND p.is_frase_compra = 1 AND p.status = 'publicado'
                                       AND i.status IN ('pendente', 'ativo') AND p.texto = ? LIMIT 1");
         foreach ($linhas as $l) {
-            $insLinha->execute([$pedidoId, $l['item_tipo_id'], $l['qtd'], $l['preco'], $l['nome'], $l['cidade'], $l['uf'],
-                                $l['frase'], $l['foto'], $l['selo_tipo'], $l['selo_valor'], $l['renova'], (int) $l['presente']]);
-            if ($l['renova']) {
-                continue;
-            }
+            $insLinha->execute([$pedidoId, $l['item_tipo_id'], $l['qtd'], 0, $l['nome'], $l['cidade'], $l['uf'],
+                                $l['frase'], $l['foto'], $l['selo_tipo'], $l['selo_valor'], null, (int) $l['presente']]);
             $linhaId = (int) $pdo->lastInsertId();
             $n = $pdo->prepare('SELECT proximo_numero FROM potes WHERE slug = ? FOR UPDATE');
             $n->execute([$lado]);
@@ -344,6 +403,8 @@ function pedido_criar(array $in, ?array $logado, string $ip): array
         $pdo->rollBack();
         throw $e;
     }
+    pedido_recalcular_nivel($u['id'], $lado);
+    logar('info', 'pedido', 'itens_gratis', count($numeros) . " item(ns) no pote $lado", ['numeros' => $numeros], $u['id']);
     // os itens novos, no formato do JS (para aparecerem na hora, sem recarregar)
     $itens = [];
     if ($numeros) {
@@ -351,8 +412,9 @@ function pedido_criar(array $in, ?array $logado, string $ip): array
                              WHERE i.lado = ? AND i.numero IN (' . implode(',', $numeros) . ') ORDER BY i.numero');
         $st->execute([$lado]);
         foreach ($st->fetchAll() as $r) {
-            $itens[] = banco_item_js($r) + ['pendente' => true, 'criado' => (int) (microtime(true) * 1000) + count($itens), 'postado' => in_array((int) $r['id'], $comPost, true),
-                                           'presente' => $r['presente_token'] !== null, 'dono' => (int) $r['id']];
+            $itens[] = banco_item_js($r) + ['criado' => (int) (microtime(true) * 1000) + count($itens), 'postado' => in_array((int) $r['id'], $comPost, true),
+                                           'presente' => $r['presente_token'] !== null, 'dono' => (int) $r['id'],
+                                           'link' => $r['presente_token'] !== null ? url_absoluta('presente', ['t' => $r['presente_token']]) : null];
         }
     }
     return ['pedido' => pedidos_js("p.id = $pedidoId")[0], 'itens' => $itens, 'entrou' => !empty($u['entrou'])];
@@ -388,10 +450,6 @@ function pedidos_js(string $onde, array $params = []): array
             'renova'   => $p['renova'] !== null ? (int) $p['renova'] : null,
             'unidades' => (int) $p['unidades'],
         ];
-        if ($p['status'] === 'pendente') {
-            $js['copiaCola'] = $p['pix_copia_cola'];
-            $js['qr'] = pix_qr_svg($p['pix_copia_cola']);
-        }
         $out[] = $js;
     }
     return $out;

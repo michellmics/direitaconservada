@@ -21,13 +21,15 @@
       ]));
   }
   // a conta de quem está vendo (tudo do banco): itens nos dois potes (inclui os pendentes, que só ela vê),
-  // pagamentos aguardando conferência, avisos do que o painel resolveu e as curtidas que deu
-  $conta = ['meus' => array_fill_keys(array_keys(SIDES), []), 'pedidos' => ['pendentes' => [], 'avisos' => [], 'titular' => null], 'curtidas' => [], 'presentes' => []];
+  // avisos de pedidos antigos, as curtidas que deu e o que pode pegar (tipos liberados, se já pegou hoje)
+  require_once __DIR__ . '/pedidos.php';
+  $conta = ['meus' => array_fill_keys(array_keys(SIDES), []), 'pedidos' => ['pendentes' => [], 'avisos' => [], 'titular' => null], 'curtidas' => [], 'presentes' => [],
+            'liberacao' => pedido_liberacao(null)];
   if ($U) {
       try {
-          require_once __DIR__ . '/pedidos.php';
           $conta = ['meus' => banco_meus_itens((int) $U['id']), 'pedidos' => pedidos_da_conta((int) $U['id']), 'curtidas' => banco_minhas_curtidas((int) $U['id']),
-                    'presentes' => banco_meus_presentes((int) $U['id'])]; // presentes que deu e ninguém resgatou
+                    'presentes' => banco_meus_presentes((int) $U['id']), // presentes que deu e ninguém resgatou
+                    'liberacao' => pedido_liberacao((int) $U['id'])];
       } catch (Throwable $ex) {
           // banco fora do ar: segue como visitante
       }
@@ -46,6 +48,7 @@
         'pedidos'  => $conta['pedidos'],
         'curtidas' => $conta['curtidas'],
         'presentes' => $conta['presentes'],
+        'liberacao' => $conta['liberacao'],
         'csrf'     => $U ? csrf_publico() : null, // para o "Sair" do perfil (sair.php)
         'pagina'   => destino_seguro($paginaAtual),
         'loginUrl' => url('entrar', ['lado' => $S['slug'], 'r' => destino_seguro($paginaAtual . '#enquete')]),

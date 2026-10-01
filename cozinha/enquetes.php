@@ -1,6 +1,6 @@
 <?php
 // Painel do administrador: enquetes (uma no ar por vez). Também é a tela de login e cuida do "Sair"
-// (o /cozinha/ mostra esta página a quem não entrou; quem entrou vai para Pagamentos).
+// (o /cozinha/ mostra esta página a quem não entrou; quem entrou vai para Visitas).
 require_once dirname(__DIR__) . '/includes/config.php';
 require_once dirname(__DIR__) . '/includes/admin_auth.php';
 require_once dirname(__DIR__) . '/includes/enquetes.php';
@@ -197,7 +197,7 @@ while (count($opcoesForm) < 2) {
     <a class="brand" href="./"><span>🗳️ Painel <b>Enquetes</b></span></a>
     <button type="button" class="adm-menu-btn" aria-label="Abrir menu" aria-expanded="false" aria-controls="adm-nav" data-adm-menu><span></span></button>
     <nav id="adm-nav">
-      <?php if ($logado): ?><a href="visitas">📊 Visitas</a> <a href="frases">💬 Frases</a> <a href="pedidos">💰 Pagamentos</a>
+      <?php if ($logado): ?><a href="visitas">📊 Visitas</a> <a href="frases">💬 Frases</a> <a href="pedidos">🧾 Pedidos</a>
       <a href="logs">📜 Logs</a>
       <a href="atualizar">🚀 Atualizar</a><?php endif; ?>
       <a href="../<?= e(url('pote', ['lado' => 'esquerda'])) ?>" target="_blank">🌶️ Ver Pimenta</a>
